@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 2: Local STT</title>
+  <title>Fluent Me - Layer 2: Direct PCM STT</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -73,7 +73,6 @@
       margin-bottom: 8px;
     }
 
-    /* Model Status Banner */
     .status-banner {
       display: flex;
       align-items: center;
@@ -96,7 +95,6 @@
     .badge-ready { background-color: var(--success); color: #000; }
     .badge-busy { background-color: var(--primary); color: #fff; }
 
-    /* Recorder Section */
     .recorder-box {
       display: flex;
       flex-direction: column;
@@ -161,7 +159,6 @@
       border-radius: 8px;
     }
 
-    /* Transcript Box */
     .transcript-box {
       min-height: 80px;
       background-color: #0d1117;
@@ -190,7 +187,7 @@
       color: #8b949e;
       padding: 10px;
       border-radius: 8px;
-      max-height: 100px;
+      max-height: 120px;
       overflow-y: auto;
       white-space: pre-wrap;
     }
@@ -199,18 +196,16 @@
 <body>
 
   <div class="container">
-    <header>
+    header>
       <h1>FLUENT ME</h1>
-      <p>Layer 2: Local AI Speech-to-Text</p>
+      <p>Layer 2: Direct PCM Local STT</p>
     </header>
 
-    <!-- Model Status -->
     <div class="status-banner">
       <span id="modelStatusText">Initializing local STT model...</span>
       <span class="badge badge-loading" id="modelBadge">LOADING</span>
     </div>
 
-    <!-- Recorder Card -->
     <div class="card recorder-box">
       <div class="timer" id="timerDisplay">00:00</div>
       
@@ -223,7 +218,6 @@
       <audio id="audioPlayback" controls style="display: none;"></audio>
     </div>
 
-    <!-- Transcript Results -->
     <div class="card">
       <div class="card-title">Live Transcript</div>
       <div class="transcript-box" id="transcriptDisplay">Your transcript will appear here after recording...</div>
@@ -233,21 +227,17 @@
       </div>
     </div>
 
-    <!-- Activity Log -->
     <div class="card">
       <div class="card-title">System Log</div>
-      <div class="log-box" id="logBox">Starting Layer 2 initialization...</div>
+      <div class="log-box" id="logBox">Starting Direct PCM initialization...</div>
     </div>
   </div>
 
-  <!-- Load Transformers.js v2 from CDN -->
   <script type="module">
     import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-    // Disable remote model downloads after initial cache
     env.allowLocalModels = false;
 
-    // DOM References
     const logBox = document.getElementById('logBox');
     const timerDisplay = document.getElementById('timerDisplay');
     const recordBtn = document.getElementById('recordBtn');
@@ -261,13 +251,12 @@
     const canvas = document.getElementById('visualizer');
     const canvasCtx = canvas.getContext('2d');
 
-    // App State
     let transcriber = null;
-    let mediaRecorder = null;
-    let audioChunks = [];
     let audioContext = null;
-    let analyser = null;
     let micStream = null;
+    let scriptProcessor = null;
+    let pcmChunks = [];
+    let isRecording = false;
     let animFrameId = null;
     let startTime = 0;
     let timerInterval = null;
@@ -284,11 +273,11 @@
       modelBadge.className = `badge ${badgeClass}`;
     }
 
-    // 1. Load Whisper Model in Browser
+    // 1. Initialize Whisper Model
     async function initModel() {
       try {
-        log('Downloading Whisper Tiny model (~39MB)...');
-        setModelStatus('Downloading Whisper Model...', 'DOWNLOADING', 'badge-loading');
+        log('Loading Whisper Tiny model...');
+        setModelStatus('Loading Whisper Model...', 'LOADING', 'badge-loading');
 
         transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
           progress_callback: (data) => {
@@ -299,7 +288,7 @@
           }
         });
 
-        log('Whisper model loaded successfully into browser memory.');
+        log('Whisper model ready.');
         setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
         recordBtn.disabled = false;
         btnText.innerText = 'Start Recording';
@@ -310,12 +299,12 @@
     }
 
     // 2. Waveform Visualizer
-    function drawVisualizer() {
-      if (!analyser) return;
+    function drawVisualizer(analyser) {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
       function render() {
+        if (!isRecording) return;
         animFrameId = requestAnimationFrame(render);
         analyser.getByteFrequencyData(dataArray);
 
@@ -335,15 +324,11 @@
       render();
     }
 
-    // 3. Screen Wake Lock
+    // 3. Screen WakeLock
     async function requestWakeLock() {
       try {
-        if ('wakeLock' in navigator) {
-          wakeLock = await navigator.wakeLock.request('screen');
-        }
-      } catch (err) {
-        log(`WakeLock warning: ${err.message}`);
-      }
+        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+      } catch (err) {}
     }
 
     function releaseWakeLock() {
@@ -367,108 +352,97 @@
       clearInterval(timerInterval);
     }
 
-    // 5. Audio Blob to 16kHz PCM Array
-    async function convertBlobTo16kHzPCM(blob) {
-      const arrayBuffer = await blob.arrayBuffer();
-      const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
-      tempCtx.close();
-
-      // OfflineContext to resample to 16000 Hz mono
-      const offlineCtx = new OfflineAudioContext(1, decodedBuffer.duration * 16000, 16000);
-      const source = offlineCtx.createBufferSource();
-      source.buffer = decodedBuffer;
-      source.connect(offlineCtx.destination);
-      source.start(0);
-
-      const resampledBuffer = await offlineCtx.startRendering();
-      return resampledBuffer.getChannelData(0); // Float32Array
-    }
-
-    // 6. Transcribe Audio
-    async function runTranscription(audioBlob) {
-      try {
-        setModelStatus('Transcribing Locally...', 'PROCESSING', 'badge-busy');
-        transcriptDisplay.innerText = 'Transcribing your voice on device...';
-        recordBtn.disabled = true;
-
-        const t0 = performance.now();
-        log('Converting audio to 16kHz PCM...');
-        const pcmData = await convertBlobTo16kHzPCM(audioBlob);
-
-        log('Running local Whisper inference...');
-        const output = await transcriber(pcmData, {
-          chunk_length_s: 30,
-          stride_length_s: 5,
-          language: 'english',
-          task: 'transcribe'
-        });
-
-        const t1 = performance.now();
-        const durationSec = (pcmData.length / 16000).toFixed(1);
-        const processSec = ((t1 - t0) / 1000).toFixed(2);
-
-        transcriptDisplay.innerText = output.text.trim() || '[No speech detected]';
-        transcribeTimeStat.innerText = `Inference Time: ${processSec}s`;
-        audioDurationStat.innerText = `Audio Length: ${durationSec}s`;
-
-        log(`Transcription done in ${processSec}s for ${durationSec}s audio.`);
-        setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
-
-      } catch (err) {
-        log(`Transcription error: ${err.message}`);
-        transcriptDisplay.innerText = 'Error processing speech locally.';
-        setModelStatus('Transcription Error', 'ERROR', 'badge-loading');
-      } finally {
-        recordBtn.disabled = false;
+    // 5. Downsample Audio Buffer to 16kHz Mono Float32
+    function resampleTo16k(audioChunks, sourceSampleRate) {
+      let totalLength = audioChunks.reduce((acc, curr) => acc + curr.length, 0);
+      let merged = new Float32Array(totalLength);
+      let offset = 0;
+      for (let chunk of audioChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
       }
+
+      if (sourceSampleRate === 16000) return merged;
+
+      const ratio = sourceSampleRate / 16000;
+      const newLength = Math.round(merged.length / ratio);
+      const result = new Float32Array(newLength);
+      for (let i = 0; i < newLength; i++) {
+        const srcIndex = Math.floor(i * ratio);
+        result[i] = merged[srcIndex];
+      }
+      return result;
     }
 
-    // 7. Start/Stop Recording
+    // 6. Convert Float32Array to WAV Blob for Playback
+    function createWavBlob(float32Array, sampleRate = 16000) {
+      const buffer = new ArrayBuffer(44 + float32Array.length * 2);
+      const view = new DataView(buffer);
+
+      function writeString(offset, string) {
+        for (let i = 0; i < string.length; i++) {
+          view.setUint8(offset + i, string.charCodeAt(i));
+        }
+      }
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + float32Array.length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true); // 16-bit
+      writeString(36, 'data');
+      view.setUint32(40, float32Array.length * 2, true);
+
+      let offset = 44;
+      for (let i = 0; i < float32Array.length; i++) {
+        let s = Math.max(-1, Math.min(1, float32Array[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+        offset += 2;
+      }
+
+      return new Blob([buffer], { type: 'audio/wav' });
+    }
+
+    // 7. Start Direct PCM Recording
     async function startRecording() {
       try {
-        audioChunks = [];
+        pcmChunks = [];
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const nativeSampleRate = audioContext.sampleRate;
+
         const source = audioContext.createMediaStreamSource(micStream);
-        analyser = audioContext.createAnalyser();
+        const analyser = audioContext.createAnalyser();
         analyser.fftSize = 64;
+
+        scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        scriptProcessor.onaudioprocess = (e) => {
+          if (!isRecording) return;
+          const channelData = e.inputBuffer.getChannelData(0);
+          pcmChunks.push(new Float32Array(channelData));
+        };
+
         source.connect(analyser);
+        source.connect(scriptProcessor);
+        scriptProcessor.connect(audioContext.destination);
 
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/mp4';
-
-        mediaRecorder = new MediaRecorder(micStream, { mimeType });
-
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        mediaRecorder.onstop = async () => {
-          stopTimer();
-          releaseWakeLock();
-          cancelAnimationFrame(animFrameId);
-          if (audioContext) audioContext.close();
-
-          const audioBlob = new Blob(audioChunks, { type: mimeType });
-          audioPlayback.src = URL.createObjectURL(audioBlob);
-          audioPlayback.style.display = 'block';
-
-          // Trigger local transcription
-          await runTranscription(audioBlob);
-        };
-
-        mediaRecorder.start(250);
+        isRecording = true;
         await requestWakeLock();
         startTimer();
-        drawVisualizer();
+        drawVisualizer(analyser);
 
         recordBtn.classList.add('recording');
         btnText.innerText = 'Stop & Transcribe';
         audioPlayback.style.display = 'none';
-        log('Recording started.');
+        log(`Recording direct PCM @ ${nativeSampleRate} Hz...`);
 
       } catch (err) {
         log(`Microphone error: ${err.message}`);
@@ -476,17 +450,76 @@
       }
     }
 
-    function stopRecording() {
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-        if (micStream) micStream.getTracks().forEach(t => t.stop());
-        recordBtn.classList.remove('recording');
-        btnText.innerText = 'Start Recording';
+    // 8. Stop & Process
+    async function stopRecording() {
+      isRecording = false;
+      stopTimer();
+      releaseWakeLock();
+      cancelAnimationFrame(animFrameId);
+
+      if (scriptProcessor) scriptProcessor.disconnect();
+      if (micStream) micStream.getTracks().forEach(t => t.stop());
+
+      recordBtn.classList.remove('recording');
+      btnText.innerText = 'Start Recording';
+      recordBtn.disabled = true;
+
+      const nativeSampleRate = audioContext ? audioContext.sampleRate : 44100;
+      if (audioContext) audioContext.close();
+
+      // Process direct PCM
+      const pcm16k = resampleTo16k(pcmChunks, nativeSampleRate);
+      
+      // Calculate Volume RMS
+      let sum = 0;
+      for (let i = 0; i < pcm16k.length; i++) sum += pcm16k[i] * pcm16k[i];
+      const rms = Math.sqrt(sum / pcm16k.length);
+      const audioDuration = (pcm16k.length / 16000).toFixed(1);
+
+      log(`Captured ${pcm16k.length} PCM samples (${audioDuration}s). RMS Volume: ${rms.toFixed(4)}`);
+
+      if (rms < 0.002) {
+        log('WARNING: Audio signal very low/silent. Check mic volume.');
+      }
+
+      // Create playback URL
+      const wavBlob = createWavBlob(pcm16k, 16000);
+      audioPlayback.src = URL.createObjectURL(wavBlob);
+      audioPlayback.style.display = 'block';
+
+      // Run Local AI Whisper
+      try {
+        setModelStatus('Transcribing Locally...', 'PROCESSING', 'badge-busy');
+        transcriptDisplay.innerText = 'Transcribing direct PCM on device...';
+
+        const t0 = performance.now();
+        const output = await transcriber(pcm16k, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          language: 'english',
+          task: 'transcribe'
+        });
+        const t1 = performance.now();
+
+        const processSec = ((t1 - t0) / 1000).toFixed(2);
+        transcriptDisplay.innerText = output.text.trim() || '[No speech detected]';
+        transcribeTimeStat.innerText = `Inference Time: ${processSec}s`;
+        audioDurationStat.innerText = `Audio Length: ${audioDuration}s`;
+
+        log(`Transcription complete in ${processSec}s.`);
+        setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
+
+      } catch (err) {
+        log(`Inference error: ${err.message}`);
+        transcriptDisplay.innerText = 'Error processing speech locally.';
+        setModelStatus('Transcription Error', 'ERROR', 'badge-loading');
+      } finally {
+        recordBtn.disabled = false;
       }
     }
 
     recordBtn.addEventListener('click', () => {
-      if (mediaRecorder && mediaRecorder.state === 'recording') {
+      if (isRecording) {
         stopRecording();
       } else {
         startRecording();
