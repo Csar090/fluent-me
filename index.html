@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 3: Speech Metrics</title>
+  <title>Fluent Me - Layer 4: Local History & Patterns</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -162,10 +162,9 @@
       border-radius: 8px;
     }
 
-    /* Editable Transcript Textarea */
     .transcript-input {
       width: 100%;
-      min-height: 100px;
+      min-height: 90px;
       background-color: #0d1117;
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -181,32 +180,31 @@
       border-color: var(--primary);
     }
 
-    /* Metrics Grid */
     .metrics-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin-top: 12px;
+      gap: 10px;
+      margin-top: 8px;
     }
 
     .metric-card {
       background-color: rgba(255, 255, 255, 0.03);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 12px;
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
 
     .metric-label {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       text-transform: uppercase;
     }
 
     .metric-value {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 700;
       color: #ffffff;
     }
@@ -216,21 +214,70 @@
       color: var(--text-muted);
     }
 
-    .fillers-list {
+    .action-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
+      gap: 8px;
+      margin-top: 12px;
     }
 
-    .filler-tag {
-      background-color: rgba(239, 68, 68, 0.2);
-      border: 1px solid var(--danger);
-      color: #fca5a5;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
+    .btn-action {
+      flex: 1;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background-color: #2a2a2a;
+      color: #ffffff;
       font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .btn-action.primary {
+      background-color: var(--success);
+      border-color: var(--success);
+      color: #000;
+    }
+
+    /* Pattern Box */
+    .pattern-card {
+      background-color: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--warning);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.85rem;
+      color: #fef08a;
+      display: none;
+    }
+
+    /* Session History List */
+    .history-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 220px;
+      overflow-y: auto;
+    }
+
+    .history-item {
+      background-color: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .history-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #ffffff;
+    }
+
+    .history-meta {
+      font-size: 0.75rem;
+      color: var(--text-muted);
     }
 
     .log-box {
@@ -238,9 +285,9 @@
       font-size: 0.75rem;
       background-color: #0d1117;
       color: #8b949e;
-      padding: 10px;
+      padding: 8px;
       border-radius: 8px;
-      max-height: 100px;
+      max-height: 90px;
       overflow-y: auto;
       white-space: pre-wrap;
     }
@@ -251,12 +298,12 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 3: Speech Analysis & Metrics</p>
+      <p>Layer 4: History & Patterns</p>
     </header>
 
-    <!-- Model Status -->
+    <!-- Model Status Banner -->
     <div class="status-banner">
-      <span id="modelStatusText">Initializing Whisper AI...</span>
+      <span id="modelStatusText">Initializing Local Whisper AI...</span>
       <span class="badge badge-loading" id="modelBadge">LOADING</span>
     </div>
 
@@ -278,10 +325,10 @@
         <span>Transcript</span>
         <span style="font-size: 0.7rem; color: var(--primary);">✏️ Tap to edit text</span>
       </div>
-      <textarea id="transcriptInput" class="transcript-input" placeholder="Your transcript will appear here after recording..."></textarea>
+      <textarea id="transcriptInput" class="transcript-input" placeholder="Your transcript will appear here..."></textarea>
     </div>
 
-    <!-- Speech Metrics Display -->
+    <!-- Speech Analysis -->
     <div class="card">
       <div class="card-title">Speech Analysis</div>
       <div class="metrics-grid">
@@ -298,22 +345,47 @@
         <div class="metric-card">
           <span class="metric-label">Filler Words</span>
           <span class="metric-value" id="mFillers">0</span>
-          <span class="metric-sub" id="mFillersRatio">0.0 per min</span>
+          <span class="metric-sub" id="mFillersRatio">0.0 / min</span>
         </div>
         <div class="metric-card">
           <span class="metric-label">Vocab Variety</span>
           <span class="metric-value" id="mVariety">0%</span>
-          <span class="metric-sub" id="mVarietySub">Unique word ratio</span>
+          <span class="metric-sub" id="mVarietySub">Unique ratio</span>
         </div>
       </div>
 
-      <div class="fillers-list" id="fillersList"></div>
+      <!-- Action Row to Save Session -->
+      <div class="action-row">
+        <button id="saveSessionBtn" class="btn-action primary" disabled>💾 Save Session</button>
+      </div>
+    </div>
+
+    <!-- Detected Patterns Card -->
+    <div class="pattern-card" id="patternBox">
+      <strong>💡 Confirmed Bottleneck Detected:</strong>
+      <div id="patternText" style="margin-top: 4px;">-</div>
+    </div>
+
+    <!-- Session History -->
+    <div class="card">
+      <div class="card-title">
+        <span>Saved Sessions</span>
+        <span id="sessionCount" style="font-size: 0.75rem; color: var(--text-muted);">0 sessions</span>
+      </div>
+      <div class="history-list" id="historyList">
+        <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 12px;">No saved sessions yet.</div>
+      </div>
+
+      <div class="action-row">
+        <button id="exportBtn" class="btn-action">📥 Export Data (JSON)</button>
+        <button id="clearDbBtn" class="btn-action" style="color: #fca5a5; border-color: var(--danger);">⚠️ Clear Data</button>
+      </div>
     </div>
 
     <!-- System Log -->
     <div class="card">
       <div class="card-title">System Log</div>
-      <div class="log-box" id="logBox">Initializing Local Whisper AI...</div>
+      <div class="log-box" id="logBox">Initializing Local Database...</div>
     </div>
   </div>
 
@@ -330,6 +402,13 @@
     const transcriptInput = document.getElementById('transcriptInput');
     const modelStatusText = document.getElementById('modelStatusText');
     const modelBadge = document.getElementById('modelBadge');
+    const saveSessionBtn = document.getElementById('saveSessionBtn');
+    const historyList = document.getElementById('historyList');
+    const sessionCount = document.getElementById('sessionCount');
+    const patternBox = document.getElementById('patternBox');
+    const patternText = document.getElementById('patternText');
+    const exportBtn = document.getElementById('exportBtn');
+    const clearDbBtn = document.getElementById('clearDbBtn');
     const canvas = document.getElementById('visualizer');
     const canvasCtx = canvas.getContext('2d');
 
@@ -342,10 +421,10 @@
     const mFillersRatio = document.getElementById('mFillersRatio');
     const mVariety = document.getElementById('mVariety');
     const mVarietySub = document.getElementById('mVarietySub');
-    const fillersList = document.getElementById('fillersList');
 
-    // App State
+    // State
     let transcriber = null;
+    let db = null;
     let audioContext = null;
     let micStream = null;
     let scriptProcessor = null;
@@ -354,15 +433,14 @@
     let animFrameId = null;
     let startTime = 0;
     let speechDurationSec = 0;
+    let currentMetrics = null;
     let timerInterval = null;
     let wakeLock = null;
 
-    // Target Filler Word Dictionary
-    const FILLER_WORDS = ['actually', 'basically', 'like', 'you know', 'um', 'uh', 'literally', 'honestly', 'i mean', 'so'];
+    const FILLER_WORDS = ['actually', 'basically', 'like', 'you know', 'um', 'uh', 'literally', 'honestly'];
 
     function log(msg) {
-      const timestamp = new Date().toLocaleTimeString();
-      logBox.innerText = `[${timestamp}] ${msg}\n` + logBox.innerText;
+      logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logBox.innerText;
     }
 
     function setModelStatus(text, badgeText, badgeClass) {
@@ -371,7 +449,159 @@
       modelBadge.className = `badge ${badgeClass}`;
     }
 
-    // 1. Initialize Whisper Model
+    // 1. IndexedDB Initialization
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open('FluentMeDB', 1);
+        req.onupgradeneeded = (e) => {
+          const dbRef = e.target.result;
+          if (!dbRef.objectStoreNames.contains('sessions')) {
+            dbRef.createObjectStore('sessions', { keyPath: 'id' });
+          }
+        };
+        req.onsuccess = (e) => {
+          db = e.target.result;
+          log('IndexedDB storage initialized.');
+          loadHistory();
+          resolve(db);
+        };
+        req.onerror = (e) => {
+          log(`IndexedDB error: ${e.target.error}`);
+          reject(e.target.error);
+        };
+      });
+    }
+
+    // 2. Load History & Scan Patterns
+    function loadHistory() {
+      if (!db) return;
+      const tx = db.transaction('sessions', 'readonly');
+      const store = tx.objectStore('sessions');
+      const req = store.getAll();
+
+      req.onsuccess = () => {
+        const sessions = req.result.sort((a, b) => b.timestamp - a.timestamp);
+        sessionCount.innerText = `${sessions.length} sessions`;
+
+        if (sessions.length === 0) {
+          historyList.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 12px;">No saved sessions yet.</div>`;
+          patternBox.style.display = 'none';
+          return;
+        }
+
+        historyList.innerHTML = sessions.map(s => {
+          const dateStr = new Date(s.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          return `
+            <div class="history-item" data-id="${s.id}">
+              <div>
+                <div class="history-title">${s.wpm} WPM • ${s.wordCount} words</div>
+                <div class="history-meta">${dateStr} • ${s.fillerCount} fillers</div>
+              </div>
+              <span style="color: var(--primary); font-size: 0.8rem;">View ›</span>
+            </div>
+          `;
+        }).join('');
+
+        // Attach click listener to load past session
+        document.querySelectorAll('.history-item').forEach(item => {
+          item.addEventListener('click', () => {
+            const id = item.getAttribute('data-id');
+            const target = sessions.find(s => s.id === id);
+            if (target) {
+              transcriptInput.value = target.transcript;
+              speechDurationSec = target.durationSec;
+              analyzeSpeech(target.transcript, target.durationSec);
+              log(`Loaded session from ${new Date(target.timestamp).toLocaleTimeString()}`);
+            }
+          });
+        });
+
+        // Scan Cross-Session Patterns across last 5 sessions
+        scanCrossSessionPatterns(sessions.slice(0, 5));
+      };
+    }
+
+    // 3. Scan Cross-Session Evidence
+    function scanCrossSessionPatterns(recentSessions) {
+      if (recentSessions.length < 2) {
+        patternBox.style.display = 'none';
+        return;
+      }
+
+      let fillerCountCount = 0;
+      let lowWpmCount = 0;
+
+      recentSessions.forEach(s => {
+        if (s.fillerCount >= 2) fillerCountCount++;
+        if (s.wpm < 100) lowWpmCount++;
+      });
+
+      if (fillerCountCount >= 2) {
+        patternBox.style.display = 'block';
+        patternText.innerText = `Filler word usage detected in ${fillerCountCount} of your last ${recentSessions.length} sessions. Focus on pausing instead of filling gaps.`;
+      } else if (lowWpmCount >= 2) {
+        patternBox.style.display = 'block';
+        patternText.innerText = `Slower speaking speed (<100 WPM) detected in ${lowWpmCount} of your last ${recentSessions.length} sessions. Try continuous storytelling challenges.`;
+      } else {
+        patternBox.style.display = 'none';
+      }
+    }
+
+    // 4. Save Current Session
+    saveSessionBtn.addEventListener('click', () => {
+      if (!db || !currentMetrics) return;
+
+      const sessionObj = {
+        id: 'sess_' + Date.now(),
+        timestamp: Date.now(),
+        durationSec: speechDurationSec,
+        transcript: transcriptInput.value,
+        wordCount: currentMetrics.totalWords,
+        wpm: currentMetrics.wpm,
+        fillerCount: currentMetrics.totalFillers,
+        varietyPct: currentMetrics.varietyPct
+      };
+
+      const tx = db.transaction('sessions', 'readwrite');
+      tx.objectStore('sessions').add(sessionObj);
+      tx.oncomplete = () => {
+        log('Session saved successfully to local storage.');
+        saveSessionBtn.disabled = true;
+        loadHistory();
+      };
+    });
+
+    // 5. Export Data (JSON)
+    exportBtn.addEventListener('click', () => {
+      if (!db) return;
+      const tx = db.transaction('sessions', 'readonly');
+      const req = tx.objectStore('sessions').getAll();
+
+      req.onsuccess = () => {
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(req.result, null, 2));
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.setAttribute("href", dataStr);
+        downloadAnchor.setAttribute("download", `fluent_me_backup_${Date.now()}.json`);
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        log('Session history exported as JSON.');
+      };
+    });
+
+    // 6. Clear Storage
+    clearDbBtn.addEventListener('click', () => {
+      if (confirm('Are you sure you want to delete all saved session data?')) {
+        const tx = db.transaction('sessions', 'readwrite');
+        tx.objectStore('sessions').clear();
+        tx.oncomplete = () => {
+          log('All local session data deleted.');
+          loadHistory();
+        };
+      }
+    });
+
+    // 7. Initialize Whisper Model
     async function initModel() {
       try {
         log('Loading Whisper AI model...');
@@ -389,7 +619,7 @@
       }
     }
 
-    // 2. Compute Speech Metrics from Transcript Text
+    // 8. Compute Speech Metrics
     function analyzeSpeech(text, durationSec) {
       const cleanText = text.trim();
       if (!cleanText) {
@@ -397,16 +627,15 @@
         mWords.innerText = '0';
         mFillers.innerText = '0';
         mVariety.innerText = '0%';
-        fillersList.innerHTML = '';
+        saveSessionBtn.disabled = true;
+        currentMetrics = null;
         return;
       }
 
-      // Word Tokenization
       const words = cleanText.toLowerCase().replace(/[^\w\s']/g, '').split(/\s+/).filter(w => w.length > 0);
       const totalWords = words.length;
-      const minutes = Math.max(durationSec / 60, 0.083); // min 5s
+      const minutes = Math.max(durationSec / 60, 0.083);
 
-      // Speaking Rate (WPM)
       const wpm = Math.round(totalWords / minutes);
       mRate.innerText = `${wpm} WPM`;
       if (wpm < 100) mRateSub.innerText = 'Pacing: Slow';
@@ -416,42 +645,29 @@
       mWords.innerText = totalWords;
       mDuration.innerText = `Duration: ${durationSec}s`;
 
-      // Filler Word Scanning
       const lowerText = cleanText.toLowerCase();
-      let fillerMatches = [];
-      let totalFillerCount = 0;
-
+      let totalFillers = 0;
       FILLER_WORDS.forEach(filler => {
-        const regex = new RegExp(`\\b${filler}\\b`, 'gi');
-        const matches = lowerText.match(regex);
-        if (matches) {
-          totalFillerCount += matches.length;
-          fillerMatches.push({ word: filler, count: matches.length });
-        }
+        const matches = lowerText.match(new RegExp(`\\b${filler}\\b`, 'gi'));
+        if (matches) totalFillers += matches.length;
       });
 
-      mFillers.innerText = totalFillerCount;
-      const fillerRate = (totalFillerCount / minutes).toFixed(1);
-      mFillersRatio.innerText = `${fillerRate} / min`;
+      mFillers.innerText = totalFillers;
+      mFillersRatio.innerText = `${(totalFillers / minutes).toFixed(1)} / min`;
 
-      // Display Filler Tags
-      fillersList.innerHTML = fillerMatches.map(f => `<span class="filler-tag">${f.word} (${f.count})</span>`).join('');
-
-      // Vocabulary Diversity (Type-Token Ratio)
       const uniqueWords = new Set(words).size;
       const varietyPct = Math.round((uniqueWords / (totalWords || 1)) * 100);
       mVariety.innerText = `${varietyPct}%`;
       mVarietySub.innerText = `${uniqueWords} unique / ${totalWords} total`;
 
-      log(`Metrics calculated: ${totalWords} words, ${wpm} WPM, ${totalFillerCount} fillers.`);
+      currentMetrics = { totalWords, wpm, totalFillers, varietyPct };
+      saveSessionBtn.disabled = false;
     }
 
-    // 3. Real-Time Transcript Input Listener
     transcriptInput.addEventListener('input', () => {
       analyzeSpeech(transcriptInput.value, speechDurationSec || 10);
     });
 
-    // 4. Waveform Visualizer
     function drawVisualizer(analyser) {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -503,7 +719,6 @@
       clearInterval(timerInterval);
     }
 
-    // 5. Start Direct PCM Capture
     async function startRecording() {
       try {
         pcmChunks = [];
@@ -549,7 +764,6 @@
       }
     }
 
-    // 6. Stop & Analyze
     async function stopRecording() {
       isRecording = false;
       stopTimer();
@@ -575,9 +789,8 @@
       }
 
       speechDurationSec = Math.round(mergedPCM.length / nativeSampleRate);
-      log(`Recorded ${speechDurationSec}s of PCM audio.`);
+      log(`Recorded ${speechDurationSec}s of audio.`);
 
-      // Resample to 16kHz
       const ratio = nativeSampleRate / 16000;
       const pcm16k = new Float32Array(Math.round(mergedPCM.length / ratio));
       for (let i = 0; i < pcm16k.length; i++) {
@@ -598,7 +811,6 @@
         log(`Transcription complete in ${((t1 - t0) / 1000).toFixed(2)}s.`);
         setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
 
-        // Run Metrics
         analyzeSpeech(transcriptInput.value, speechDurationSec);
 
       } catch (err) {
@@ -618,9 +830,10 @@
       }
     });
 
-    window.addEventListener('DOMContentLoaded', () => {
+    window.addEventListener('DOMContentLoaded', async () => {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
+      await initDB();
       initModel();
     });
   </script>
