@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 4: Verbatim Fillers</title>
+  <title>Fluent Me - Layer 4: Complete Hesitation Capture</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -313,7 +313,7 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 4: Verbatim Filler Capture</p>
+      <p>Layer 4: Full Hesitation Capture</p>
     </header>
 
     <div class="status-banner">
@@ -337,7 +337,7 @@
         <span>Transcript</span>
         <span style="font-size: 0.7rem; color: var(--primary);">✏️ Tap to edit text</span>
       </div>
-      <textarea id="transcriptInput" class="transcript-input" placeholder="Your verbatim transcript will appear here..."></textarea>
+      <textarea id="transcriptInput" class="transcript-input" placeholder="Your transcript will appear here..."></textarea>
     </div>
 
     <div class="card">
@@ -359,9 +359,9 @@
           <span class="metric-sub" id="mFillersRatio">0.0 / min</span>
         </div>
         <div class="metric-card">
-          <span class="metric-label">Vocab Variety</span>
-          <span class="metric-value" id="mVariety">0%</span>
-          <span class="metric-sub" id="mVarietySub">Unique ratio</span>
+          <span class="metric-label">Pauses / Hesitations</span>
+          <span class="metric-value" id="mPauses">0</span>
+          <span class="metric-sub" id="mPausesSub">Signal pauses >0.5s</span>
         </div>
       </div>
 
@@ -426,8 +426,8 @@
     const mDuration = document.getElementById('mDuration');
     const mFillers = document.getElementById('mFillers');
     const mFillersRatio = document.getElementById('mFillersRatio');
-    const mVariety = document.getElementById('mVariety');
-    const mVarietySub = document.getElementById('mVarietySub');
+    const mPauses = document.getElementById('mPauses');
+    const mPausesSub = document.getElementById('mPausesSub');
     const fillersList = document.getElementById('fillersList');
 
     let transcriber = null;
@@ -440,6 +440,7 @@
     let animFrameId = null;
     let startTime = 0;
     let speechDurationSec = 0;
+    let detectedHesitationsCount = 0;
     let currentMetrics = null;
     let timerInterval = null;
     let wakeLock = null;
@@ -454,6 +455,31 @@
       modelStatusText.innerText = text;
       modelBadge.innerText = badgeText;
       modelBadge.className = `badge ${badgeClass}`;
+    }
+
+    // Acoustic Signal Hesitation Detector
+    function detectAcousticHesitations(pcmData, sampleRate = 16000) {
+      const frameSize = Math.round(sampleRate * 0.1); // 100ms
+      let silentFrames = 0;
+      let hesitations = 0;
+
+      for (let i = 0; i < pcmData.length; i += frameSize) {
+        let sum = 0;
+        for (let j = 0; j < frameSize && (i + j) < pcmData.length; j++) {
+          sum += pcmData[i + j] * pcmData[i + j];
+        }
+        let rms = Math.sqrt(sum / frameSize);
+
+        if (rms < 0.008) {
+          silentFrames++;
+        } else {
+          if (silentFrames >= 5) { // >= 500ms hesitation gap
+            hesitations++;
+          }
+          silentFrames = 0;
+        }
+      }
+      return hesitations;
     }
 
     function initDB() {
@@ -497,7 +523,7 @@
             <div class="history-item" data-id="${s.id}">
               <div>
                 <div class="history-title">${s.wpm} WPM • ${s.wordCount} words</div>
-                <div class="history-meta">${dateStr} • ${s.fillerCount} fillers</div>
+                <div class="history-meta">${dateStr} • ${s.fillerCount} fillers • ${s.pauseCount || 0} pauses</div>
               </div>
               <span style="color: var(--primary); font-size: 0.8rem;">View ›</span>
             </div>
@@ -511,6 +537,7 @@
             if (target) {
               transcriptInput.value = target.transcript;
               speechDurationSec = target.durationSec;
+              detectedHesitationsCount = target.pauseCount || 0;
               analyzeSpeech(target.transcript, target.durationSec);
             }
           });
@@ -528,18 +555,23 @@
 
       let fillerCountCount = 0;
       let lowWpmCount = 0;
+      let pauseCountCount = 0;
 
       recentSessions.forEach(s => {
         if (s.fillerCount >= 2) fillerCountCount++;
         if (s.wpm < 100) lowWpmCount++;
+        if ((s.pauseCount || 0) >= 3) pauseCountCount++;
       });
 
       if (fillerCountCount >= 2) {
         patternBox.style.display = 'block';
-        patternText.innerText = `Filler words detected in ${fillerCountCount} of your last ${recentSessions.length} sessions. Focus on pausing instead of using filler words.`;
+        patternText.innerText = `Filler word usage detected in ${fillerCountCount} of your last ${recentSessions.length} sessions. Focus on silent pauses instead of filler words.`;
+      } else if (pauseCountCount >= 2) {
+        patternBox.style.display = 'block';
+        patternText.innerText = `Frequent hesitations (3+ pauses) detected in ${pauseCountCount} of your last ${recentSessions.length} sessions. Practice continuous sentence flow.`;
       } else if (lowWpmCount >= 2) {
         patternBox.style.display = 'block';
-        patternText.innerText = `Slower speaking speed (<100 WPM) detected in ${lowWpmCount} of your last ${recentSessions.length} sessions. Try continuous storytelling challenges.`;
+        patternText.innerText = `Slower speaking speed (<100 WPM) detected in ${lowWpmCount} of your last ${recentSessions.length} sessions. Try continuous storytelling.`;
       } else {
         patternBox.style.display = 'none';
       }
@@ -556,7 +588,7 @@
         wordCount: currentMetrics.totalWords,
         wpm: currentMetrics.wpm,
         fillerCount: currentMetrics.totalFillers,
-        varietyPct: currentMetrics.varietyPct
+        pauseCount: detectedHesitationsCount
       };
 
       const tx = db.transaction('sessions', 'readwrite');
@@ -618,7 +650,7 @@
         mRate.innerText = '0 WPM';
         mWords.innerText = '0';
         mFillers.innerText = '0';
-        mVariety.innerText = '0%';
+        mPauses.innerText = '0';
         fillersList.innerHTML = '';
         saveSessionBtn.disabled = true;
         currentMetrics = null;
@@ -653,14 +685,12 @@
       mFillers.innerText = totalFillers;
       mFillersRatio.innerText = `${(totalFillers / minutes).toFixed(1)} / min`;
 
+      mPauses.innerText = detectedHesitationsCount;
+      mPausesSub.innerText = `${detectedHesitationsCount} gaps >0.5s`;
+
       fillersList.innerHTML = fillerMatches.map(f => `<span class="filler-tag">${f.word} (${f.count})</span>`).join('');
 
-      const uniqueWords = new Set(words).size;
-      const varietyPct = Math.round((uniqueWords / (totalWords || 1)) * 100);
-      mVariety.innerText = `${varietyPct}%`;
-      mVarietySub.innerText = `${uniqueWords} unique / ${totalWords} total`;
-
-      currentMetrics = { totalWords, wpm, totalFillers, varietyPct };
+      currentMetrics = { totalWords, wpm, totalFillers, pauseCount: detectedHesitationsCount };
       saveSessionBtn.disabled = false;
     }
 
@@ -796,15 +826,20 @@
         pcm16k[i] = mergedPCM[Math.floor(i * ratio)];
       }
 
+      // Calculate Signal Hesitation Pauses
+      detectedHesitationsCount = detectAcousticHesitations(pcm16k, 16000);
+      log(`Signal Hesitations (>0.5s): ${detectedHesitationsCount}`);
+
       try {
         setModelStatus('Transcribing Verbatim...', 'PROCESSING', 'badge-busy');
         transcriptInput.value = 'Transcribing on device...';
 
         const t0 = performance.now();
         
-        // Verbatim prompt conditioning to preserve filler words and hesitations
+        // Unsuppress tokens + prompt conditioning for verbatim hesitations
         const output = await transcriber(pcm16k, {
-          initial_prompt: "Um, uh, well, like, actually, basically, you know, literally, honestly..."
+          initial_prompt: "Um, uh, well, like, actually, basically, you know, literally, honestly...",
+          suppress_tokens: []
         });
         const t1 = performance.now();
 
