@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 5: Automated Coach</title>
+  <title>Fluent Me - Approach 1: Gap Analysis</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -214,23 +214,6 @@
       color: var(--text-muted);
     }
 
-    .fillers-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      margin-top: 8px;
-    }
-
-    .filler-tag {
-      background-color: rgba(239, 68, 68, 0.2);
-      border: 1px solid var(--danger);
-      color: #fca5a5;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 600;
-    }
-
     .coach-box {
       display: flex;
       flex-direction: column;
@@ -341,7 +324,7 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 5: Automated Feedback Loop</p>
+      <p>Approach 1: Audio Gap Analysis</p>
     </header>
 
     <div class="status-banner">
@@ -360,7 +343,6 @@
       <audio id="audioPlayback" controls style="display: none;"></audio>
     </div>
 
-    <!-- Transcript Box -->
     <div class="card">
       <div class="card-title">
         <span>Transcript</span>
@@ -369,12 +351,11 @@
       <textarea id="transcriptInput" class="transcript-input" placeholder="Your transcript will appear here..."></textarea>
     </div>
 
-    <!-- Metrics -->
     <div class="card">
       <div class="card-title">Speech Analysis</div>
       <div class="metrics-grid">
         <div class="metric-card">
-          <span class="metric-label">Speaking Rate</span>
+          <span class="metric-label">Speaking Speed</span>
           <span class="metric-value" id="mRate">0 WPM</span>
           <span class="metric-sub" id="mRateSub">Target: 110-150 WPM</span>
         </div>
@@ -384,18 +365,16 @@
           <span class="metric-sub" id="mDuration">Duration: 0s</span>
         </div>
         <div class="metric-card">
-          <span class="metric-label">Filler Words</span>
-          <span class="metric-value" id="mFillers">0</span>
-          <span class="metric-sub" id="mFillersRatio">0.0 / min</span>
+          <span class="metric-label">Voiced Hesitations</span>
+          <span class="metric-value" id="mVoicedHesitations">0</span>
+          <span class="metric-sub" id="mVoicedSub">"uh" / "ah" gaps</span>
         </div>
         <div class="metric-card">
-          <span class="metric-label">Vocal Hesitations</span>
-          <span class="metric-value" id="mPauses">0</span>
-          <span class="metric-sub" id="mPausesSub">Um / Uh / Gaps</span>
+          <span class="metric-label">Silent Pauses</span>
+          <span class="metric-value" id="mSilentPauses">0</span>
+          <span class="metric-sub" id="mSilentSub">Silent gaps >250ms</span>
         </div>
       </div>
-
-      <div class="fillers-list" id="fillersList"></div>
     </div>
 
     <!-- AI Coach -->
@@ -403,7 +382,7 @@
       <div class="card-title">AI Speaking Coach</div>
       <div class="coach-box" id="coachBox">
         <div class="coach-item coach-strength" id="coachStrength">⭐ Strength: Ready to evaluate your speech.</div>
-        <div class="coach-item coach-focus" id="coachFocus">🎯 Primary Focus: Record a session to identify bottlenecks.</div>
+        <div class="coach-item coach-focus" id="coachFocus">🎯 Primary Focus: Record a session to analyze gaps.</div>
         <div class="coach-item coach-rewrite" id="coachRewrite">✏️ Better Version: Suggestions will appear here.</div>
         <div class="coach-item coach-challenge" id="coachChallenge">🎙 Next Challenge: Awaiting session...</div>
       </div>
@@ -429,7 +408,6 @@
       </div>
     </div>
 
-    <!-- Log -->
     <div class="card">
       <div class="card-title">System Log</div>
       <div class="log-box" id="logBox">Initializing Local Database...</div>
@@ -460,10 +438,10 @@
     const mRateSub = document.getElementById('mRateSub');
     const mWords = document.getElementById('mWords');
     const mDuration = document.getElementById('mDuration');
-    const mFillers = document.getElementById('mFillers');
-    const mFillersRatio = document.getElementById('mFillersRatio');
-    const mPauses = document.getElementById('mPauses');
-    const mPausesSub = document.getElementById('mPausesSub');
+    const mVoicedHesitations = document.getElementById('mVoicedHesitations');
+    const mVoicedSub = document.getElementById('mVoicedSub');
+    const mSilentPauses = document.getElementById('mSilentPauses');
+    const mSilentSub = document.getElementById('mSilentSub');
 
     const coachStrength = document.getElementById('coachStrength');
     const coachFocus = document.getElementById('coachFocus');
@@ -480,12 +458,11 @@
     let animFrameId = null;
     let startTime = 0;
     let speechDurationSec = 0;
-    let detectedHesitationsCount = 0;
     let currentMetrics = null;
     let timerInterval = null;
     let wakeLock = null;
 
-    const FILLER_WORDS = ['actually', 'basically', 'like', 'you know', 'um', 'uh', 'literally', 'honestly', 'i mean', 'so'];
+    const FILLER_WORDS = ['actually', 'basically', 'like', 'you know', 'literally', 'honestly', 'so'];
 
     function log(msg) {
       logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logBox.innerText;
@@ -497,40 +474,48 @@
       modelBadge.className = `badge ${badgeClass}`;
     }
 
-    // Automated Acoustic Hesitation & Pitch Flatness Analyzer
-    function detectAcousticHesitations(pcmData, sampleRate = 16000) {
-      const frameSize = Math.round(sampleRate * 0.1); // 100ms frames
-      let silentFrames = 0;
-      let flatToneFrames = 0;
-      let totalHesitations = 0;
-      let prevRms = 0;
+    // Approach 1: Audio-Timestamp Gap Analysis Algorithm
+    function analyzeAudioGaps(chunks, pcm16k, noiseFloor = 0.008) {
+      let silentPauses = 0;
+      let voicedHesitations = 0;
 
-      for (let i = 0; i < pcmData.length; i += frameSize) {
-        let sum = 0;
-        for (let j = 0; j < frameSize && (i + j) < pcmData.length; j++) {
-          sum += pcmData[i + j] * pcmData[i + j];
-        }
-        let rms = Math.sqrt(sum / frameSize);
-
-        if (rms < 0.008) {
-          silentFrames++;
-        } else {
-          // Detect flat, continuous vocal energy (um/uh vocalizations)
-          const rmsDelta = Math.abs(rms - prevRms);
-          if (rmsDelta < 0.005 && rms > 0.015) {
-            flatToneFrames++;
-          } else {
-            flatToneFrames = 0;
-          }
-
-          if (silentFrames >= 3 || flatToneFrames >= 3) { // >= 300ms hesitation gap or flat tone
-            totalHesitations++;
-          }
-          silentFrames = 0;
-        }
-        prevRms = rms;
+      if (!chunks || chunks.length < 2) {
+        return { silentPauses: 0, voicedHesitations: 0 };
       }
-      return totalHesitations;
+
+      for (let i = 0; i < chunks.length - 1; i++) {
+        const currentEnd = chunks[i].timestamp ? chunks[i].timestamp : null;
+        const nextStart = chunks[i+1].timestamp ? chunks[i+1].timestamp[0] : null;
+
+        if (currentEnd !== null && nextStart !== null) {
+          const gapDuration = nextStart - currentEnd;
+
+          // Target gap window between 250ms and 2000ms
+          if (gapDuration >= 0.25 && gapDuration <= 2.0) {
+            const startSample = Math.floor(currentEnd * 16000);
+            const endSample = Math.min(Math.floor(nextStart * 16000), pcm16k.length);
+            const gapSamples = pcm16k.slice(startSample, endSample);
+
+            if (gapSamples.length > 0) {
+              // Calculate RMS volume during gap
+              let sum = 0;
+              for (let k = 0; j = gapSamples.length, k < j; k++) {
+                sum += gapSamples[k] * gapSamples[k];
+              }
+              const gapRms = Math.sqrt(sum / gapSamples.length);
+
+              // Signal threshold check
+              if (gapRms > (noiseFloor * 1.5)) {
+                voicedHesitations++; // Sound present during gap -> "uh" / "ah"
+              } else {
+                silentPauses++; // Silence during gap -> Silent pause
+              }
+            }
+          }
+        }
+      }
+
+      return { silentPauses, voicedHesitations };
     }
 
     function initDB() {
@@ -573,7 +558,7 @@
             <div class="history-item" data-id="${s.id}">
               <div>
                 <div class="history-title">${s.wpm} WPM • ${s.wordCount} words</div>
-                <div class="history-meta">${dateStr} • ${s.fillerCount} fillers • ${s.pauseCount || 0} hesitations</div>
+                <div class="history-meta">${dateStr} • ${s.voicedHesitations || 0} uh/ah • ${s.silentPauses || 0} pauses</div>
               </div>
               <span style="color: var(--primary); font-size: 0.8rem;">View ›</span>
             </div>
@@ -587,8 +572,10 @@
             if (target) {
               transcriptInput.value = target.transcript;
               speechDurationSec = target.durationSec;
-              detectedHesitationsCount = target.pauseCount || 0;
-              analyzeSpeech(target.transcript, target.durationSec);
+              analyzeSpeech(target.transcript, target.durationSec, {
+                voicedHesitations: target.voicedHesitations || 0,
+                silentPauses: target.silentPauses || 0
+              });
             }
           });
         });
@@ -599,21 +586,21 @@
       if (!metrics || !rawText) return;
 
       if (metrics.wpm >= 110 && metrics.wpm <= 150) {
-        coachStrength.innerText = `⭐ Strength: Optimal speaking speed (${metrics.wpm} WPM) with clear pacing.`;
+        coachStrength.innerText = `⭐ Strength: Optimal speaking speed (${metrics.wpm} WPM) with natural pacing.`;
       } else if (metrics.totalWords > 30) {
         coachStrength.innerText = `⭐ Strength: Good verbal elaboration (${metrics.totalWords} words spoken).`;
       } else {
-        coachStrength.innerText = `⭐ Strength: Clear articulation and continuous audio stream.`;
+        coachStrength.innerText = `⭐ Strength: Clear articulation and continuous speech stream.`;
       }
 
-      const totalDisfluency = metrics.totalFillers + metrics.pauseCount;
-
-      if (totalDisfluency >= 3) {
-        coachFocus.innerText = `🎯 Primary Focus: High disfluency count (${metrics.totalFillers} filler words + ${metrics.pauseCount} vocal hesitations/pauses). Focus on silent pauses between ideas.`;
+      if (metrics.voicedHesitations >= 2) {
+        coachFocus.innerText = `🎯 Primary Focus: Detected ${metrics.voicedHesitations} vocalized hesitations ("uh" / "ah") during word gaps. Focus on converting vocal hesitations to silent pauses.`;
+      } else if (metrics.silentPauses >= 3) {
+        coachFocus.innerText = `🎯 Primary Focus: Detected ${metrics.silentPauses} silent pauses longer than 250ms. Work on continuous sentence flow.`;
       } else if (metrics.wpm < 100) {
-        coachFocus.innerText = `🎯 Primary Focus: Speaking rate (${metrics.wpm} WPM) is slow. Continuous practice recommended.`;
+        coachFocus.innerText = `🎯 Primary Focus: Speaking speed (${metrics.wpm} WPM) is slow. Continuous practice recommended.`;
       } else {
-        coachFocus.innerText = `🎯 Primary Focus: Maintain current pacing and clear sentence structures.`;
+        coachFocus.innerText = `🎯 Primary Focus: Maintain current optimal pacing and clear sentence structures.`;
       }
 
       let cleaned = rawText;
@@ -623,10 +610,10 @@
       cleaned = cleaned.replace(/\s+/g, ' ').trim();
       coachRewrite.innerText = `✏️ Better Version: "${cleaned}"`;
 
-      if (totalDisfluency >= 3) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Retell this topic in 45 seconds with 0 filler words and fewer than 2 hesitations."`;
-      } else if (metrics.wpm < 100) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Speak continuously for 60 seconds aiming for 120-140 WPM."`;
+      if (metrics.voicedHesitations >= 2) {
+        coachChallenge.innerText = `🎙 Next Challenge: "Retell this topic in 45 seconds with 0 'uh/ah' vocal hesitations."`;
+      } else if (metrics.silentPauses >= 3) {
+        coachChallenge.innerText = `🎙 Next Challenge: "Answer a rapid question continuously with zero pauses longer than 1 second."`;
       } else {
         coachChallenge.innerText = `🎙 Next Challenge: "Describe a complex past event using clear storytelling transitions."`;
       }
@@ -642,8 +629,8 @@
         transcript: transcriptInput.value,
         wordCount: currentMetrics.totalWords,
         wpm: currentMetrics.wpm,
-        fillerCount: currentMetrics.totalFillers,
-        pauseCount: detectedHesitationsCount
+        voicedHesitations: currentMetrics.voicedHesitations,
+        silentPauses: currentMetrics.silentPauses
       };
 
       const tx = db.transaction('sessions', 'readwrite');
@@ -699,13 +686,13 @@
       }
     }
 
-    function analyzeSpeech(text, durationSec) {
+    function analyzeSpeech(text, durationSec, gapMetrics = { silentPauses: 0, voicedHesitations: 0 }) {
       const cleanText = text.trim();
       if (!cleanText) {
         mRate.innerText = '0 WPM';
         mWords.innerText = '0';
-        mFillers.innerText = '0';
-        mPauses.innerText = '0';
+        mVoicedHesitations.innerText = '0';
+        mSilentPauses.innerText = '0';
         saveSessionBtn.disabled = true;
         currentMetrics = null;
         return;
@@ -724,28 +711,28 @@
       mWords.innerText = totalWords;
       mDuration.innerText = `Duration: ${durationSec}s`;
 
-      const lowerText = cleanText.toLowerCase();
-      let totalFillers = 0;
+      mVoicedHesitations.innerText = gapMetrics.voicedHesitations;
+      mVoicedSub.innerText = `${gapMetrics.voicedHesitations} vocal gaps ("uh/ah")`;
 
-      FILLER_WORDS.forEach(filler => {
-        const matches = lowerText.match(new RegExp(`\\b${filler}\\b`, 'gi'));
-        if (matches) totalFillers += matches.length;
-      });
+      mSilentPauses.innerText = gapMetrics.silentPauses;
+      mSilentSub.innerText = `${gapMetrics.silentPauses} silent gaps >250ms`;
 
-      mFillers.innerText = totalFillers;
-      mFillersRatio.innerText = `${(totalFillers / minutes).toFixed(1)} / min`;
+      currentMetrics = {
+        totalWords,
+        wpm,
+        voicedHesitations: gapMetrics.voicedHesitations,
+        silentPauses: gapMetrics.silentPauses
+      };
 
-      mPauses.innerText = detectedHesitationsCount;
-      mPausesSub.innerText = `${detectedHesitationsCount} vocal/silent gaps`;
-
-      currentMetrics = { totalWords, wpm, totalFillers, pauseCount: detectedHesitationsCount };
       saveSessionBtn.disabled = false;
-
       generateCoachInsights(currentMetrics, cleanText);
     }
 
     transcriptInput.addEventListener('input', () => {
-      analyzeSpeech(transcriptInput.value, speechDurationSec || 10);
+      analyzeSpeech(transcriptInput.value, speechDurationSec || 10, {
+        voicedHesitations: currentMetrics ? currentMetrics.voicedHesitations : 0,
+        silentPauses: currentMetrics ? currentMetrics.silentPauses : 0
+      });
     });
 
     function drawVisualizer(analyser) {
@@ -876,30 +863,32 @@
         pcm16k[i] = mergedPCM[Math.floor(i * ratio)];
       }
 
-      detectedHesitationsCount = detectAcousticHesitations(pcm16k, 16000);
-      log(`Automated Hesitations/Pauses detected: ${detectedHesitationsCount}`);
-
       try {
-        setModelStatus('Transcribing...', 'PROCESSING', 'badge-busy');
-        transcriptInput.value = 'Transcribing on device...';
+        setModelStatus('Analyzing Word Timestamps & Audio Gaps...', 'PROCESSING', 'badge-busy');
+        transcriptInput.value = 'Transcribing and analyzing word gaps...';
 
         const t0 = performance.now();
-        const output = await transcriber(pcm16k, {
-          initial_prompt: "Um, uh, well, like, actually, basically, you know, literally, honestly...",
-          suppress_tokens: []
-        });
+        
+        // Request Word-Level Timestamps from Whisper
+        const output = await transcriber(pcm16k, { return_timestamps: true });
         const t1 = performance.now();
 
         const extractedText = (Array.isArray(output) ? output[0]?.text : output?.text) || '';
-        transcriptInput.value = extractedText.trim();
+        const chunks = (Array.isArray(output) ? output[0]?.chunks : output?.chunks) || [];
 
-        log(`Transcription complete in ${((t1 - t0) / 1000).toFixed(2)}s.`);
+        transcriptInput.value = extractedText.trim();
+        log(`Transcribed in ${((t1 - t0) / 1000).toFixed(2)}s. Extracted ${chunks.length} timestamped chunks.`);
+
+        // Run Approach 1 Gap Analysis
+        const gapResults = analyzeAudioGaps(chunks, pcm16k, 0.008);
+        log(`Approach 1 Results: ${gapResults.voicedHesitations} Voiced Hesitations ("uh/ah"), ${gapResults.silentPauses} Silent Pauses.`);
+
         setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
 
-        analyzeSpeech(transcriptInput.value, speechDurationSec);
+        analyzeSpeech(transcriptInput.value, speechDurationSec, gapResults);
 
       } catch (err) {
-        log(`Transcription error: ${err.message}`);
+        log(`Inference error: ${err.message}`);
         transcriptInput.value = 'Error processing speech locally.';
         setModelStatus('Transcription Error', 'ERROR', 'badge-loading');
       } finally {
