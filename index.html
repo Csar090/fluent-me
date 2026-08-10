@@ -3,490 +3,222 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 2: Dual Engine STT</title>
+  <title>Fluent Me - Hardware Diagnostic</title>
   <style>
-    :root {
-      --bg-color: #121212;
-      --card-bg: #1e1e1e;
-      --primary: #3b82f6;
-      --danger: #ef4444;
-      --success: #10b981;
-      --text: #f3f4f6;
-      --text-muted: #9ca3af;
-      --border: #374151;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      -webkit-tap-highlight-color: transparent;
-    }
-
     body {
-      background-color: var(--bg-color);
-      color: var(--text);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      min-height: 100vh;
+      background-color: #121212;
+      color: #f3f4f6;
+      font-family: monospace;
       padding: 16px;
+      margin: 0;
     }
-
-    .container {
-      width: 100%;
-      max-width: 480px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    header {
-      text-align: center;
-      padding: 8px 0;
-    }
-
-    header h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-    }
-
-    header p {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-    }
-
+    h1 { font-size: 1.2rem; color: #3b82f6; margin-bottom: 8px; }
     .card {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-    }
-
-    .card-title {
-      font-size: 0.85rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-
-    .engine-selector {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .engine-btn {
-      flex: 1;
-      padding: 8px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background-color: #2a2a2a;
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .engine-btn.active {
-      background-color: var(--primary);
-      color: #ffffff;
-      border-color: var(--primary);
-    }
-
-    .recorder-box {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 16px;
-      padding: 20px 16px;
-      text-align: center;
-    }
-
-    .timer {
-      font-size: 2.5rem;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-    }
-
-    canvas {
-      width: 100%;
-      height: 50px;
-      background-color: #111827;
-      border-radius: 8px;
-      border: 1px solid var(--border);
-    }
-
-    .btn-record {
-      width: 100%;
-      max-width: 280px;
-      height: 56px;
-      border-radius: 28px;
-      border: none;
-      background-color: var(--primary);
-      color: #ffffff;
-      font-size: 1.1rem;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    .btn-record.recording {
-      background-color: var(--danger);
-      animation: pulse 1.5s infinite;
-    }
-
-    @keyframes pulse {
-      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-      70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-    }
-
-    audio {
-      width: 100%;
-      margin-top: 8px;
-      border-radius: 8px;
-    }
-
-    .transcript-box {
-      min-height: 80px;
-      background-color: #0d1117;
-      border: 1px solid var(--border);
+      background-color: #1e1e1e;
+      border: 1px solid #374151;
       border-radius: 8px;
       padding: 12px;
-      font-size: 0.95rem;
-      line-height: 1.5;
-      color: #e5e7eb;
-      white-space: pre-wrap;
-      word-break: break-word;
+      margin-bottom: 12px;
     }
-
+    .card-title { font-weight: bold; color: #9ca3af; margin-bottom: 8px; font-size: 0.85rem; }
+    button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 6px;
+      border: none;
+      background-color: #3b82f6;
+      color: white;
+      font-weight: bold;
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+    .pass { color: #10b981; font-weight: bold; }
+    .fail { color: #ef4444; font-weight: bold; }
+    .warn { color: #f59e0b; font-weight: bold; }
     .log-box {
-      font-family: monospace;
-      font-size: 0.75rem;
       background-color: #0d1117;
       color: #8b949e;
-      padding: 10px;
-      border-radius: 8px;
-      max-height: 120px;
-      overflow-y: auto;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
       white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
     }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <header>
-      <h1>FLUENT ME</h1>
-      <p>Layer 2: Dual Engine STT</p>
-    </header>
+  <h1>Diagnostic Suite</h1>
 
-    <!-- Engine Selector -->
-    <div class="card">
-      <div class="card-title">STT Engine Selection</div>
-      <div class="engine-selector">
-        <button id="engineNativeBtn" class="engine-btn active">Native Android Chrome</button>
-        <button id="engineWhisperBtn" class="engine-btn">Whisper AI (Local)</button>
-      </div>
-    </div>
+  <div class="card">
+    <button id="runBtn">RUN DIAGNOSTIC TESTS</button>
+  </div>
 
-    <!-- Recorder -->
-    <div class="card recorder-box">
-      <div class="timer" id="timerDisplay">00:00</div>
-      <canvas id="visualizer"></canvas>
+  <div class="card">
+    <div class="card-title">Test 1: Hardware Mic Signal</div>
+    <div id="test1Result">Pending...</div>
+  </div>
 
-      <button id="recordBtn" class="btn-record">
-        <span>🎙</span> <span id="btnText">Start Recording</span>
-      </button>
+  <div class="card">
+    <div class="card-title">Test 2: Chrome Speech Engine Events</div>
+    <div id="test2Result">Pending...</div>
+  </div>
 
-      <audio id="audioPlayback" controls style="display: none;"></audio>
-    </div>
+  <div class="card">
+    <div class="card-title">Test 3: Synthetic Audio WASM/ONNX</div>
+    <div id="test3Result">Pending...</div>
+  </div>
 
-    <!-- Transcript -->
-    <div class="card">
-      <div class="card-title">Live Transcript</div>
-      <div class="transcript-box" id="transcriptDisplay">Your transcript will appear here...</div>
-    </div>
-
-    <!-- System Log -->
-    <div class="card">
-      <div class="card-title">System Log</div>
-      <div class="log-box" id="logBox">Select engine and tap Start Recording...</div>
-    </div>
+  <div class="card">
+    <div class="card-title">Diagnostic Log</div>
+    <div class="log-box" id="logBox">Tap button to start...</div>
   </div>
 
   <script type="module">
     import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
     env.allowLocalModels = false;
 
-    // DOM Elements
     const logBox = document.getElementById('logBox');
-    const timerDisplay = document.getElementById('timerDisplay');
-    const recordBtn = document.getElementById('recordBtn');
-    const btnText = document.getElementById('btnText');
-    const audioPlayback = document.getElementById('audioPlayback');
-    const transcriptDisplay = document.getElementById('transcriptDisplay');
-    const engineNativeBtn = document.getElementById('engineNativeBtn');
-    const engineWhisperBtn = document.getElementById('engineWhisperBtn');
-    const canvas = document.getElementById('visualizer');
-    const canvasCtx = canvas.getContext('2d');
-
-    // App State
-    let selectedEngine = 'native'; // 'native' or 'whisper'
-    let whisperPipeline = null;
-    let recognition = null;
-    let audioContext = null;
-    let micStream = null;
-    let scriptProcessor = null;
-    let pcmChunks = [];
-    let isRecording = false;
-    let nativeTranscriptAcc = '';
-    let animFrameId = null;
-    let startTime = 0;
-    let timerInterval = null;
-    let wakeLock = null;
+    const runBtn = document.getElementById('runBtn');
+    const test1Result = document.getElementById('test1Result');
+    const test2Result = document.getElementById('test2Result');
+    const test3Result = document.getElementById('test3Result');
 
     function log(msg) {
-      const timestamp = new Date().toLocaleTimeString();
-      logBox.innerText = `[${timestamp}] ${msg}\n` + logBox.innerText;
+      logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logBox.innerText;
     }
 
-    // Engine Selection Toggle
-    engineNativeBtn.addEventListener('click', () => {
-      selectedEngine = 'native';
-      engineNativeBtn.classList.add('active');
-      engineWhisperBtn.classList.remove('active');
-      log('Engine set to Native Android Chrome Speech API');
-    });
+    runBtn.addEventListener('click', async () => {
+      runBtn.disabled = true;
+      log('Starting Diagnostic Tests...');
 
-    engineWhisperBtn.addEventListener('click', async () => {
-      selectedEngine = 'whisper';
-      engineWhisperBtn.classList.add('active');
-      engineNativeBtn.classList.remove('active');
-      log('Engine set to Whisper Local AI Model');
-
-      if (!whisperPipeline) {
-        log('Loading Whisper model into memory...');
-        try {
-          whisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-          log('Whisper model loaded successfully.');
-        } catch (err) {
-          log(`Whisper load error: ${err.message}`);
-        }
-      }
-    });
-
-    function drawVisualizer(analyser) {
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-      
-      function render() {
-        if (!isRecording) return;
-        animFrameId = requestAnimationFrame(render);
-        analyser.getByteFrequencyData(dataArray);
-
-        canvasCtx.fillStyle = '#111827';
-        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const barWidth = (canvas.width / bufferLength) * 2.5;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-          const barHeight = (dataArray[i] / 255) * canvas.height;
-          canvasCtx.fillStyle = '#3b82f6';
-          canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-          x += barWidth + 1;
-        }
-      }
-      render();
-    }
-
-    async function requestWakeLock() {
+      // --- TEST 1: RAW MIC HARDWARE CHECK ---
+      test1Result.innerHTML = 'Testing raw mic signal...';
       try {
-        if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
-      } catch (err) {}
-    }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+        });
 
-    function releaseWakeLock() {
-      if (wakeLock) {
-        wakeLock.release().then(() => wakeLock = null);
-      }
-    }
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') await ctx.resume();
 
-    function startTimer() {
-      startTime = Date.now();
-      timerInterval = setInterval(() => {
-        const elapsed = Math.floor((Date.now() - startTime) / 1000);
-        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
-        const secs = String(elapsed % 60).padStart(2, '0');
-        timerDisplay.innerText = `${mins}:${secs}`;
-      }, 1000);
-    }
+        const src = ctx.createMediaStreamSource(stream);
+        const processor = ctx.createScriptProcessor(2048, 1, 1);
+        let samplesCaptured = [];
 
-    function stopTimer() {
-      clearInterval(timerInterval);
-    }
-
-    // Start Recording
-    async function startRecording() {
-      try {
-        pcmChunks = [];
-        nativeTranscriptAcc = '';
-        transcriptDisplay.innerText = 'Listening...';
-
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-        // Unblock AudioContext on Android Chrome
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-          log('Resumed suspended AudioContext.');
-        }
-
-        const source = audioContext.createMediaStreamSource(micStream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 64;
-
-        scriptProcessor = audioContext.createScriptProcessor(4096, 1, 1);
-
-        scriptProcessor.onaudioprocess = (e) => {
-          if (!isRecording) return;
-          const input = e.inputBuffer.getChannelData(0);
-          pcmChunks.push(new Float32Array(input));
+        processor.onaudioprocess = (e) => {
+          const data = e.inputBuffer.getChannelData(0);
+          for (let i = 0; i < data.length; i++) {
+            samplesCaptured.push(Math.abs(data[i]));
+          }
         };
 
-        source.connect(analyser);
-        source.connect(scriptProcessor);
-        scriptProcessor.connect(audioContext.destination);
+        src.connect(processor);
+        processor.connect(ctx.destination);
 
-        // Native Android Speech Engine Setup
-        if (selectedEngine === 'native') {
-          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-          if (SpeechRecognition) {
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
+        await new Promise(r => setTimeout(r, 1500)); // Collect 1.5s of audio
 
-            recognition.onresult = (e) => {
-              let currentText = '';
-              for (let i = e.resultIndex; i < e.results.length; i++) {
-                currentText += e.results[i][0].transcript;
-              }
-              transcriptDisplay.innerText = currentText || 'Listening...';
-              nativeTranscriptAcc = currentText;
-            };
+        processor.disconnect();
+        stream.getTracks().forEach(t => t.stop());
+        ctx.close();
 
-            recognition.onerror = (e) => {
-              log(`Native Speech error: ${e.error}`);
-            };
+        let maxAmp = Math.max(...samplesCaptured);
+        let sum = samplesCaptured.reduce((a, b) => a + b, 0);
+        let avgAmp = sum / samplesCaptured.length;
 
-            recognition.start();
-            log('Native SpeechRecognition engine started.');
-          } else {
-            log('Native SpeechRecognition not supported on this browser.');
-          }
+        log(`Mic Samples: ${samplesCaptured.length}, Max Peak: ${maxAmp.toFixed(5)}, Avg: ${avgAmp.toFixed(5)}`);
+
+        if (maxAmp === 0) {
+          test1Result.innerHTML = `<span class="fail">FAIL: Pure Silence (0.0000). Android OS/Chrome is blocking mic audio.</span>`;
+        } else if (maxAmp < 0.005) {
+          test1Result.innerHTML = `<span class="warn">WARNING: Audio extremely quiet (${maxAmp.toFixed(4)}). Check mic volume.</span>`;
+        } else {
+          test1Result.innerHTML = `<span class="pass">PASS: Hardware mic working! Peak signal: ${maxAmp.toFixed(4)}</span>`;
         }
-
-        isRecording = true;
-        await requestWakeLock();
-        startTimer();
-        drawVisualizer(analyser);
-
-        recordBtn.classList.add('recording');
-        btnText.innerText = 'Stop Recording';
-        audioPlayback.style.display = 'none';
-        log(`Recording active. Engine: ${selectedEngine}`);
 
       } catch (err) {
-        log(`Microphone error: ${err.message}`);
-        alert('Microphone access failed.');
-      }
-    }
-
-    // Stop & Transcribe
-    async function stopRecording() {
-      isRecording = false;
-      stopTimer();
-      releaseWakeLock();
-      cancelAnimationFrame(animFrameId);
-
-      if (scriptProcessor) scriptProcessor.disconnect();
-      if (recognition) {
-        try { recognition.stop(); } catch(e){}
-      }
-      if (micStream) micStream.getTracks().forEach(t => t.stop());
-
-      recordBtn.classList.remove('recording');
-      btnText.innerText = 'Start Recording';
-
-      const nativeSampleRate = audioContext ? audioContext.sampleRate : 44100;
-      if (audioContext) audioContext.close();
-
-      // Process PCM audio for playback
-      let totalSamples = pcmChunks.reduce((a, b) => a + b.length, 0);
-      let mergedPCM = new Float32Array(totalSamples);
-      let offset = 0;
-      for (let chunk of pcmChunks) {
-        mergedPCM.set(chunk, offset);
-        offset += chunk.length;
+        test1Result.innerHTML = `<span class="fail">FAIL: Mic Permission/Hardware Error: ${err.message}</span>`;
+        log(`Test 1 Error: ${err.message}`);
       }
 
-      // Calculate RMS Volume
-      let sum = 0;
-      for (let i = 0; i < mergedPCM.length; i++) sum += mergedPCM[i] * mergedPCM[i];
-      const rms = Math.sqrt(sum / (mergedPCM.length || 1));
-      const durationSec = (mergedPCM.length / nativeSampleRate).toFixed(1);
+      // --- TEST 2: NATIVE SPEECH ENGINE EVENT INSPECTOR ---
+      test2Result.innerHTML = 'Testing Chrome Speech Engine...';
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-      log(`Audio captured: ${durationSec}s. RMS Volume: ${rms.toFixed(4)}`);
-
-      // Whisper Local Model Execution
-      if (selectedEngine === 'whisper') {
-        if (!whisperPipeline) {
-          log('Loading Whisper model...');
-          whisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
-        }
-
-        // Resample to 16kHz
-        const ratio = nativeSampleRate / 16000;
-        const pcm16k = new Float32Array(Math.round(mergedPCM.length / ratio));
-        for (let i = 0; i < pcm16k.length; i++) {
-          pcm16k[i] = mergedPCM[Math.floor(i * ratio)];
-        }
-
-        log('Running Whisper inference...');
-        const t0 = performance.now();
-        const output = await whisperPipeline(pcm16k);
-        const t1 = performance.now();
-
-        const extractedText = Array.isArray(output) ? output[0]?.text : output?.text;
-        transcriptDisplay.innerText = (extractedText && extractedText.trim()) || '[No speech detected]';
-        log(`Whisper completed in ${((t1 - t0) / 1000).toFixed(2)}s.`);
+      if (!SpeechRecognition) {
+        test2Result.innerHTML = `<span class="fail">FAIL: webkitSpeechRecognition API missing in this browser.</span>`;
       } else {
-        if (!nativeTranscriptAcc) {
-          transcriptDisplay.innerText = '[No speech detected]';
+        const rec = new SpeechRecognition();
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.lang = 'en-US';
+
+        let eventsLogged = [];
+
+        rec.onstart = () => eventsLogged.push('onstart');
+        rec.onaudiostart = () => eventsLogged.push('onaudiostart');
+        rec.onsoundstart = () => eventsLogged.push('onsoundstart');
+        rec.onspeechstart = () => eventsLogged.push('onspeechstart');
+        rec.onresult = (e) => {
+          eventsLogged.push('onresult');
+          const txt = e.results[0][0].transcript;
+          log(`Speech Engine Result: "${txt}"`);
+        };
+        rec.onerror = (e) => {
+          eventsLogged.push(`onerror:${e.error}`);
+          log(`Speech Engine Error Event: ${e.error}`);
+        };
+        rec.onend = () => {
+          eventsLogged.push('onend');
+          log(`Speech Engine Sequence: ${eventsLogged.join(' -> ')}`);
+
+          if (eventsLogged.includes('onerror:network')) {
+            test2Result.innerHTML = `<span class="fail">FAIL: Network Error. Google Speech Service blocked or offline.</span>`;
+          } else if (eventsLogged.includes('onerror:no-speech')) {
+            test2Result.innerHTML = `<span class="warn">NO SPEECH: Google Speech Engine detected no audio input.</span>`;
+          } else if (eventsLogged.includes('onresult')) {
+            test2Result.innerHTML = `<span class="pass">PASS: Chrome Speech Engine Working!</span>`;
+          } else {
+            test2Result.innerHTML = `<span class="warn">ENDED: Events captured: ${eventsLogged.join(', ')}</span>`;
+          }
+        };
+
+        try {
+          rec.start();
+          log('Speech Engine started. Speak now...');
+          await new Promise(r => setTimeout(r, 4000));
+          rec.stop();
+        } catch (e) {
+          test2Result.innerHTML = `<span class="fail">FAIL: Could not start: ${e.message}</span>`;
         }
       }
-    }
 
-    recordBtn.addEventListener('click', () => {
-      if (isRecording) {
-        stopRecording();
-      } else {
-        startRecording();
+      // --- TEST 3: SYNTHETIC AUDIO ONNX/WASM INFERENCE ---
+      test3Result.innerHTML = 'Testing Whisper WASM with synthetic audio...';
+      try {
+        log('Loading Whisper model for synthetic tensor check...');
+        const pipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+
+        // Create 2 seconds of 440Hz synthetic audio tone
+        const synthPCM = new Float32Array(32000);
+        for (let i = 0; i < synthPCM.length; i++) {
+          synthPCM[i] = Math.sin(2 * Math.PI * 440 * (i / 16000)) * 0.5;
+        }
+
+        log('Feeding synthetic audio into Whisper...');
+        const out = await pipe(synthPCM);
+        log(`Synthetic audio result: ${JSON.stringify(out)}`);
+
+        test3Result.innerHTML = `<span class="pass">PASS: WASM ONNX Engine functional! Output: ${JSON.stringify(out)}</span>`;
+
+      } catch (err) {
+        test3Result.innerHTML = `<span class="fail">FAIL: WASM ONNX Inference Error: ${err.message}</span>`;
+        log(`Test 3 Error: ${err.message}`);
       }
-    });
 
-    window.addEventListener('DOMContentLoaded', () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
+      runBtn.disabled = false;
+      log('Diagnostic Suite Completed.');
     });
   </script>
 </body>
