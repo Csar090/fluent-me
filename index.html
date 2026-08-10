@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 2: Direct PCM STT</title>
+  <title>Fluent Me - Layer 2: Fixed STT</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -196,9 +196,9 @@
 <body>
 
   <div class="container">
-    header>
+    <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 2: Direct PCM Local STT</p>
+      <p>Layer 2: Fixed Local AI STT</p>
     </header>
 
     <div class="status-banner">
@@ -229,7 +229,7 @@
 
     <div class="card">
       <div class="card-title">System Log</div>
-      <div class="log-box" id="logBox">Starting Direct PCM initialization...</div>
+      <div class="log-box" id="logBox">Initializing fix...</div>
     </div>
   </div>
 
@@ -273,10 +273,10 @@
       modelBadge.className = `badge ${badgeClass}`;
     }
 
-    // 1. Initialize Whisper Model
+    // 1. Initialize Model
     async function initModel() {
       try {
-        log('Loading Whisper Tiny model...');
+        log('Loading Xenova/whisper-tiny.en model...');
         setModelStatus('Loading Whisper Model...', 'LOADING', 'badge-loading');
 
         transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
@@ -298,7 +298,7 @@
       }
     }
 
-    // 2. Waveform Visualizer
+    // 2. Visualizer
     function drawVisualizer(analyser) {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -324,7 +324,6 @@
       render();
     }
 
-    // 3. Screen WakeLock
     async function requestWakeLock() {
       try {
         if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
@@ -337,7 +336,6 @@
       }
     }
 
-    // 4. Timer
     function startTimer() {
       startTime = Date.now();
       timerInterval = setInterval(() => {
@@ -352,7 +350,6 @@
       clearInterval(timerInterval);
     }
 
-    // 5. Downsample Audio Buffer to 16kHz Mono Float32
     function resampleTo16k(audioChunks, sourceSampleRate) {
       let totalLength = audioChunks.reduce((acc, curr) => acc + curr.length, 0);
       let merged = new Float32Array(totalLength);
@@ -374,7 +371,6 @@
       return result;
     }
 
-    // 6. Convert Float32Array to WAV Blob for Playback
     function createWavBlob(float32Array, sampleRate = 16000) {
       const buffer = new ArrayBuffer(44 + float32Array.length * 2);
       const view = new DataView(buffer);
@@ -390,12 +386,12 @@
       writeString(8, 'WAVE');
       writeString(12, 'fmt ');
       view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true); // PCM
-      view.setUint16(22, 1, true); // Mono
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
       view.setUint32(24, sampleRate, true);
       view.setUint32(28, sampleRate * 2, true);
       view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true); // 16-bit
+      view.setUint16(34, 16, true);
       writeString(36, 'data');
       view.setUint32(40, float32Array.length * 2, true);
 
@@ -409,7 +405,6 @@
       return new Blob([buffer], { type: 'audio/wav' });
     }
 
-    // 7. Start Direct PCM Recording
     async function startRecording() {
       try {
         pcmChunks = [];
@@ -442,7 +437,7 @@
         recordBtn.classList.add('recording');
         btnText.innerText = 'Stop & Transcribe';
         audioPlayback.style.display = 'none';
-        log(`Recording direct PCM @ ${nativeSampleRate} Hz...`);
+        log(`Recording PCM @ ${nativeSampleRate} Hz...`);
 
       } catch (err) {
         log(`Microphone error: ${err.message}`);
@@ -450,7 +445,6 @@
       }
     }
 
-    // 8. Stop & Process
     async function stopRecording() {
       isRecording = false;
       stopTimer();
@@ -467,42 +461,36 @@
       const nativeSampleRate = audioContext ? audioContext.sampleRate : 44100;
       if (audioContext) audioContext.close();
 
-      // Process direct PCM
       const pcm16k = resampleTo16k(pcmChunks, nativeSampleRate);
       
-      // Calculate Volume RMS
       let sum = 0;
       for (let i = 0; i < pcm16k.length; i++) sum += pcm16k[i] * pcm16k[i];
       const rms = Math.sqrt(sum / pcm16k.length);
       const audioDuration = (pcm16k.length / 16000).toFixed(1);
 
-      log(`Captured ${pcm16k.length} PCM samples (${audioDuration}s). RMS Volume: ${rms.toFixed(4)}`);
+      log(`Samples: ${pcm16k.length} (${audioDuration}s). Volume RMS: ${rms.toFixed(4)}`);
 
-      if (rms < 0.002) {
-        log('WARNING: Audio signal very low/silent. Check mic volume.');
-      }
-
-      // Create playback URL
       const wavBlob = createWavBlob(pcm16k, 16000);
       audioPlayback.src = URL.createObjectURL(wavBlob);
       audioPlayback.style.display = 'block';
 
-      // Run Local AI Whisper
       try {
         setModelStatus('Transcribing Locally...', 'PROCESSING', 'badge-busy');
         transcriptDisplay.innerText = 'Transcribing direct PCM on device...';
 
         const t0 = performance.now();
-        const output = await transcriber(pcm16k, {
-          chunk_length_s: 30,
-          stride_length_s: 5,
-          language: 'english',
-          task: 'transcribe'
-        });
+        
+        // Pass PCM array directly without invalid multilingual flags
+        const output = await transcriber(pcm16k);
         const t1 = performance.now();
 
         const processSec = ((t1 - t0) / 1000).toFixed(2);
-        transcriptDisplay.innerText = output.text.trim() || '[No speech detected]';
+        
+        // Handle both Array and Object output formats
+        log(`Raw output: ${JSON.stringify(output)}`);
+        const extractedText = Array.isArray(output) ? output[0]?.text : output?.text;
+        
+        transcriptDisplay.innerText = (extractedText && extractedText.trim()) || '[No speech detected]';
         transcribeTimeStat.innerText = `Inference Time: ${processSec}s`;
         audioDurationStat.innerText = `Audio Length: ${audioDuration}s`;
 
