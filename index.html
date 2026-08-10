@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 2: Fixed STT</title>
+  <title>Fluent Me - Layer 2: Dual Engine STT</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -73,27 +73,29 @@
       margin-bottom: 8px;
     }
 
-    .status-banner {
+    .engine-selector {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 14px;
-      background-color: rgba(59, 130, 246, 0.1);
-      border: 1px solid var(--primary);
-      border-radius: 8px;
-      font-size: 0.85rem;
-      font-weight: 500;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
-    .badge {
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 0.75rem;
-      font-weight: 700;
+    .engine-btn {
+      flex: 1;
+      padding: 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background-color: #2a2a2a;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
     }
-    .badge-loading { background-color: #f59e0b; color: #000; }
-    .badge-ready { background-color: var(--success); color: #000; }
-    .badge-busy { background-color: var(--primary); color: #fff; }
+
+    .engine-btn.active {
+      background-color: var(--primary);
+      color: #ffffff;
+      border-color: var(--primary);
+    }
 
     .recorder-box {
       display: flex;
@@ -133,13 +135,6 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: background-color 0.2s, transform 0.1s;
-    }
-
-    .btn-record:disabled {
-      background-color: #4b5563;
-      cursor: not-allowed;
-      opacity: 0.6;
     }
 
     .btn-record.recording {
@@ -172,14 +167,6 @@
       word-break: break-word;
     }
 
-    .stats-row {
-      display: flex;
-      justify-content: space-between;
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      margin-top: 8px;
-    }
-
     .log-box {
       font-family: monospace;
       font-size: 0.75rem;
@@ -198,65 +185,69 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 2: Fixed Local AI STT</p>
+      <p>Layer 2: Dual Engine STT</p>
     </header>
 
-    <div class="status-banner">
-      <span id="modelStatusText">Initializing local STT model...</span>
-      <span class="badge badge-loading" id="modelBadge">LOADING</span>
+    <!-- Engine Selector -->
+    <div class="card">
+      <div class="card-title">STT Engine Selection</div>
+      <div class="engine-selector">
+        <button id="engineNativeBtn" class="engine-btn active">Native Android Chrome</button>
+        <button id="engineWhisperBtn" class="engine-btn">Whisper AI (Local)</button>
+      </div>
     </div>
 
+    <!-- Recorder -->
     <div class="card recorder-box">
       <div class="timer" id="timerDisplay">00:00</div>
-      
       <canvas id="visualizer"></canvas>
 
-      <button id="recordBtn" class="btn-record" disabled>
-        <span>🎙</span> <span id="btnText">Loading Model...</span>
+      <button id="recordBtn" class="btn-record">
+        <span>🎙</span> <span id="btnText">Start Recording</span>
       </button>
 
       <audio id="audioPlayback" controls style="display: none;"></audio>
     </div>
 
+    <!-- Transcript -->
     <div class="card">
       <div class="card-title">Live Transcript</div>
-      <div class="transcript-box" id="transcriptDisplay">Your transcript will appear here after recording...</div>
-      <div class="stats-row">
-        <span id="transcribeTimeStat">Inference Time: -</span>
-        <span id="audioDurationStat">Audio Length: -</span>
-      </div>
+      <div class="transcript-box" id="transcriptDisplay">Your transcript will appear here...</div>
     </div>
 
+    <!-- System Log -->
     <div class="card">
       <div class="card-title">System Log</div>
-      <div class="log-box" id="logBox">Initializing fix...</div>
+      <div class="log-box" id="logBox">Select engine and tap Start Recording...</div>
     </div>
   </div>
 
   <script type="module">
     import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
-
     env.allowLocalModels = false;
 
+    // DOM Elements
     const logBox = document.getElementById('logBox');
     const timerDisplay = document.getElementById('timerDisplay');
     const recordBtn = document.getElementById('recordBtn');
     const btnText = document.getElementById('btnText');
     const audioPlayback = document.getElementById('audioPlayback');
     const transcriptDisplay = document.getElementById('transcriptDisplay');
-    const modelStatusText = document.getElementById('modelStatusText');
-    const modelBadge = document.getElementById('modelBadge');
-    const transcribeTimeStat = document.getElementById('transcribeTimeStat');
-    const audioDurationStat = document.getElementById('audioDurationStat');
+    const engineNativeBtn = document.getElementById('engineNativeBtn');
+    const engineWhisperBtn = document.getElementById('engineWhisperBtn');
     const canvas = document.getElementById('visualizer');
     const canvasCtx = canvas.getContext('2d');
 
-    let transcriber = null;
+    // App State
+    let selectedEngine = 'native'; // 'native' or 'whisper'
+    let whisperPipeline = null;
+    let recognition = null;
     let audioContext = null;
     let micStream = null;
     let scriptProcessor = null;
     let pcmChunks = [];
     let isRecording = false;
+    let nativeTranscriptAcc = '';
     let animFrameId = null;
     let startTime = 0;
     let timerInterval = null;
@@ -267,38 +258,31 @@
       logBox.innerText = `[${timestamp}] ${msg}\n` + logBox.innerText;
     }
 
-    function setModelStatus(text, badgeText, badgeClass) {
-      modelStatusText.innerText = text;
-      modelBadge.innerText = badgeText;
-      modelBadge.className = `badge ${badgeClass}`;
-    }
+    // Engine Selection Toggle
+    engineNativeBtn.addEventListener('click', () => {
+      selectedEngine = 'native';
+      engineNativeBtn.classList.add('active');
+      engineWhisperBtn.classList.remove('active');
+      log('Engine set to Native Android Chrome Speech API');
+    });
 
-    // 1. Initialize Model
-    async function initModel() {
-      try {
-        log('Loading Xenova/whisper-tiny.en model...');
-        setModelStatus('Loading Whisper Model...', 'LOADING', 'badge-loading');
+    engineWhisperBtn.addEventListener('click', async () => {
+      selectedEngine = 'whisper';
+      engineWhisperBtn.classList.add('active');
+      engineNativeBtn.classList.remove('active');
+      log('Engine set to Whisper Local AI Model');
 
-        transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
-          progress_callback: (data) => {
-            if (data.status === 'progress') {
-              const pct = Math.round(data.progress || 0);
-              setModelStatus(`Loading Model (${pct}%)...`, 'LOADING', 'badge-loading');
-            }
-          }
-        });
-
-        log('Whisper model ready.');
-        setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
-        recordBtn.disabled = false;
-        btnText.innerText = 'Start Recording';
-      } catch (err) {
-        log(`Model load error: ${err.message}`);
-        setModelStatus('Failed to load model', 'ERROR', 'badge-loading');
+      if (!whisperPipeline) {
+        log('Loading Whisper model into memory...');
+        try {
+          whisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+          log('Whisper model loaded successfully.');
+        } catch (err) {
+          log(`Whisper load error: ${err.message}`);
+        }
       }
-    }
+    });
 
-    // 2. Visualizer
     function drawVisualizer(analyser) {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
@@ -350,68 +334,21 @@
       clearInterval(timerInterval);
     }
 
-    function resampleTo16k(audioChunks, sourceSampleRate) {
-      let totalLength = audioChunks.reduce((acc, curr) => acc + curr.length, 0);
-      let merged = new Float32Array(totalLength);
-      let offset = 0;
-      for (let chunk of audioChunks) {
-        merged.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      if (sourceSampleRate === 16000) return merged;
-
-      const ratio = sourceSampleRate / 16000;
-      const newLength = Math.round(merged.length / ratio);
-      const result = new Float32Array(newLength);
-      for (let i = 0; i < newLength; i++) {
-        const srcIndex = Math.floor(i * ratio);
-        result[i] = merged[srcIndex];
-      }
-      return result;
-    }
-
-    function createWavBlob(float32Array, sampleRate = 16000) {
-      const buffer = new ArrayBuffer(44 + float32Array.length * 2);
-      const view = new DataView(buffer);
-
-      function writeString(offset, string) {
-        for (let i = 0; i < string.length; i++) {
-          view.setUint8(offset + i, string.charCodeAt(i));
-        }
-      }
-
-      writeString(0, 'RIFF');
-      view.setUint32(4, 36 + float32Array.length * 2, true);
-      writeString(8, 'WAVE');
-      writeString(12, 'fmt ');
-      view.setUint32(16, 16, true);
-      view.setUint16(20, 1, true);
-      view.setUint16(22, 1, true);
-      view.setUint32(24, sampleRate, true);
-      view.setUint32(28, sampleRate * 2, true);
-      view.setUint16(32, 2, true);
-      view.setUint16(34, 16, true);
-      writeString(36, 'data');
-      view.setUint32(40, float32Array.length * 2, true);
-
-      let offset = 44;
-      for (let i = 0; i < float32Array.length; i++) {
-        let s = Math.max(-1, Math.min(1, float32Array[i]));
-        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-        offset += 2;
-      }
-
-      return new Blob([buffer], { type: 'audio/wav' });
-    }
-
+    // Start Recording
     async function startRecording() {
       try {
         pcmChunks = [];
+        nativeTranscriptAcc = '';
+        transcriptDisplay.innerText = 'Listening...';
+
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+        // Unblock AudioContext on Android Chrome
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const nativeSampleRate = audioContext.sampleRate;
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+          log('Resumed suspended AudioContext.');
+        }
 
         const source = audioContext.createMediaStreamSource(micStream);
         const analyser = audioContext.createAnalyser();
@@ -421,13 +358,42 @@
 
         scriptProcessor.onaudioprocess = (e) => {
           if (!isRecording) return;
-          const channelData = e.inputBuffer.getChannelData(0);
-          pcmChunks.push(new Float32Array(channelData));
+          const input = e.inputBuffer.getChannelData(0);
+          pcmChunks.push(new Float32Array(input));
         };
 
         source.connect(analyser);
         source.connect(scriptProcessor);
         scriptProcessor.connect(audioContext.destination);
+
+        // Native Android Speech Engine Setup
+        if (selectedEngine === 'native') {
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onresult = (e) => {
+              let currentText = '';
+              for (let i = e.resultIndex; i < e.results.length; i++) {
+                currentText += e.results[i][0].transcript;
+              }
+              transcriptDisplay.innerText = currentText || 'Listening...';
+              nativeTranscriptAcc = currentText;
+            };
+
+            recognition.onerror = (e) => {
+              log(`Native Speech error: ${e.error}`);
+            };
+
+            recognition.start();
+            log('Native SpeechRecognition engine started.');
+          } else {
+            log('Native SpeechRecognition not supported on this browser.');
+          }
+        }
 
         isRecording = true;
         await requestWakeLock();
@@ -435,16 +401,17 @@
         drawVisualizer(analyser);
 
         recordBtn.classList.add('recording');
-        btnText.innerText = 'Stop & Transcribe';
+        btnText.innerText = 'Stop Recording';
         audioPlayback.style.display = 'none';
-        log(`Recording PCM @ ${nativeSampleRate} Hz...`);
+        log(`Recording active. Engine: ${selectedEngine}`);
 
       } catch (err) {
         log(`Microphone error: ${err.message}`);
-        alert('Could not access microphone.');
+        alert('Microphone access failed.');
       }
     }
 
+    // Stop & Transcribe
     async function stopRecording() {
       isRecording = false;
       stopTimer();
@@ -452,57 +419,60 @@
       cancelAnimationFrame(animFrameId);
 
       if (scriptProcessor) scriptProcessor.disconnect();
+      if (recognition) {
+        try { recognition.stop(); } catch(e){}
+      }
       if (micStream) micStream.getTracks().forEach(t => t.stop());
 
       recordBtn.classList.remove('recording');
       btnText.innerText = 'Start Recording';
-      recordBtn.disabled = true;
 
       const nativeSampleRate = audioContext ? audioContext.sampleRate : 44100;
       if (audioContext) audioContext.close();
 
-      const pcm16k = resampleTo16k(pcmChunks, nativeSampleRate);
-      
+      // Process PCM audio for playback
+      let totalSamples = pcmChunks.reduce((a, b) => a + b.length, 0);
+      let mergedPCM = new Float32Array(totalSamples);
+      let offset = 0;
+      for (let chunk of pcmChunks) {
+        mergedPCM.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      // Calculate RMS Volume
       let sum = 0;
-      for (let i = 0; i < pcm16k.length; i++) sum += pcm16k[i] * pcm16k[i];
-      const rms = Math.sqrt(sum / pcm16k.length);
-      const audioDuration = (pcm16k.length / 16000).toFixed(1);
+      for (let i = 0; i < mergedPCM.length; i++) sum += mergedPCM[i] * mergedPCM[i];
+      const rms = Math.sqrt(sum / (mergedPCM.length || 1));
+      const durationSec = (mergedPCM.length / nativeSampleRate).toFixed(1);
 
-      log(`Samples: ${pcm16k.length} (${audioDuration}s). Volume RMS: ${rms.toFixed(4)}`);
+      log(`Audio captured: ${durationSec}s. RMS Volume: ${rms.toFixed(4)}`);
 
-      const wavBlob = createWavBlob(pcm16k, 16000);
-      audioPlayback.src = URL.createObjectURL(wavBlob);
-      audioPlayback.style.display = 'block';
+      // Whisper Local Model Execution
+      if (selectedEngine === 'whisper') {
+        if (!whisperPipeline) {
+          log('Loading Whisper model...');
+          whisperPipeline = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en');
+        }
 
-      try {
-        setModelStatus('Transcribing Locally...', 'PROCESSING', 'badge-busy');
-        transcriptDisplay.innerText = 'Transcribing direct PCM on device...';
+        // Resample to 16kHz
+        const ratio = nativeSampleRate / 16000;
+        const pcm16k = new Float32Array(Math.round(mergedPCM.length / ratio));
+        for (let i = 0; i < pcm16k.length; i++) {
+          pcm16k[i] = mergedPCM[Math.floor(i * ratio)];
+        }
 
+        log('Running Whisper inference...');
         const t0 = performance.now();
-        
-        // Pass PCM array directly without invalid multilingual flags
-        const output = await transcriber(pcm16k);
+        const output = await whisperPipeline(pcm16k);
         const t1 = performance.now();
 
-        const processSec = ((t1 - t0) / 1000).toFixed(2);
-        
-        // Handle both Array and Object output formats
-        log(`Raw output: ${JSON.stringify(output)}`);
         const extractedText = Array.isArray(output) ? output[0]?.text : output?.text;
-        
         transcriptDisplay.innerText = (extractedText && extractedText.trim()) || '[No speech detected]';
-        transcribeTimeStat.innerText = `Inference Time: ${processSec}s`;
-        audioDurationStat.innerText = `Audio Length: ${audioDuration}s`;
-
-        log(`Transcription complete in ${processSec}s.`);
-        setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
-
-      } catch (err) {
-        log(`Inference error: ${err.message}`);
-        transcriptDisplay.innerText = 'Error processing speech locally.';
-        setModelStatus('Transcription Error', 'ERROR', 'badge-loading');
-      } finally {
-        recordBtn.disabled = false;
+        log(`Whisper completed in ${((t1 - t0) / 1000).toFixed(2)}s.`);
+      } else {
+        if (!nativeTranscriptAcc) {
+          transcriptDisplay.innerText = '[No speech detected]';
+        }
       }
     }
 
@@ -517,7 +487,6 @@
     window.addEventListener('DOMContentLoaded', () => {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      initModel();
     });
   </script>
 </body>
