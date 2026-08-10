@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fluent Me - Layer 1 Test Shell</title>
+  <style>
+    :root {
+      --bg-color: #121212;
+      --card-bg: #1e1e1e;
+      --primary: #3b82f6;
+      --danger: #ef4444;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --border: #374151;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    header {
+      text-align: center;
+      padding: 12px 0;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    header p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .card-title {
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    /* Device Diagnostic Grid */
+    .diag-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .diag-item {
+      display: flex;
+      justify-content: space-between;
+      background-color: rgba(255, 255, 255, 0.03);
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .status-ok { color: #10b981; }
+    .status-warn { color: #f59e0b; }
+    .status-fail { color: #ef4444; }
+
+    /* Recorder Controls */
+    .recorder-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 24px 16px;
+      text-align: center;
+    }
+
+    .timer {
+      font-size: 2.5rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Visualizer Canvas */
+    canvas {
+      width: 100%;
+      height: 60px;
+      background-color: #111827;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .btn-record {
+      width: 100%;
+      max-width: 280px;
+      height: 56px;
+      border-radius: 28px;
+      border: none;
+      background-color: var(--primary);
+      color: #ffffff;
+      font-size: 1.1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .btn-record:active {
+      transform: scale(0.98);
+    }
+
+    .btn-record.recording {
+      background-color: var(--danger);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+      70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    audio {
+      width: 100%;
+      margin-top: 12px;
+      border-radius: 8px;
+    }
+
+    .log-box {
+      font-family: monospace;
+      font-size: 0.75rem;
+      background-color: #0d1117;
+      color: #8b949e;
+      padding: 12px;
+      border-radius: 8px;
+      max-height: 120px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>FLUENT ME</h1>
+      <p>Layer 1: Mobile Micro-Shell Test</p>
+    </header>
+
+    <!-- System Feasibility Report -->
+    <div class="card">
+      <div class="card-title">Device Diagnostics</div>
+      <div class="diag-grid" id="diagGrid">
+        <div class="diag-item"><span>Secure Context:</span> <span id="diagSecure">-</span></div>
+        <div class="diag-item"><span>Microphone:</span> <span id="diagMic">-</span></div>
+        <div class="diag-item"><span>WebGPU:</span> <span id="diagGpu">-</span></div>
+        <div class="diag-item"><span>WebAssembly:</span> <span id="diagWasm">-</span></div>
+        <div class="diag-item"><span>IndexedDB:</span> <span id="diagIdb">-</span></div>
+        <div class="diag-item"><span>CPU Cores:</span> <span id="diagCores">-</span></div>
+      </div>
+    </div>
+
+    <!-- Recorder Main Card -->
+    <div class="card recorder-box">
+      <div class="timer" id="timerDisplay">00:00</div>
+      
+      <canvas id="visualizer"></canvas>
+
+      <button id="recordBtn" class="btn-record">
+        <span>🎙</span> <span id="btnText">Start Recording</span>
+      </button>
+
+      <audio id="audioPlayback" controls style="display: none;"></audio>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card">
+      <div class="card-title">Activity Log</div>
+      <div class="log-box" id="logBox">Initializing diagnostics...</div>
+    </div>
+  </div>
+
+  <script>
+    // System & DOM State
+    const logBox = document.getElementById('logBox');
+    const timerDisplay = document.getElementById('timerDisplay');
+    const recordBtn = document.getElementById('recordBtn');
+    const btnText = document.getElementById('btnText');
+    const audioPlayback = document.getElementById('audioPlayback');
+    const canvas = document.getElementById('visualizer');
+    const canvasCtx = canvas.getContext('2d');
+
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let audioContext = null;
+    let analyser = null;
+    let micStream = null;
+    let animFrameId = null;
+    let startTime = 0;
+    let timerInterval = null;
+    let wakeLock = null;
+
+    function log(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      logBox.innerText = `[${timestamp}] ${msg}\n` + logBox.innerText;
+    }
+
+    // 1. Run Device Diagnostics
+    function runDiagnostics() {
+      const isSecure = window.isSecureContext;
+      const hasMic = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+      const hasGpu = !!navigator.gpu;
+      const hasWasm = typeof WebAssembly === 'object';
+      const hasIdb = !!window.indexedDB;
+      const cores = navigator.hardwareConcurrency || 'Unknown';
+
+      document.getElementById('diagSecure').innerHTML = isSecure ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
+      document.getElementById('diagMic').innerHTML = hasMic ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
+      document.getElementById('diagGpu').innerHTML = hasGpu ? '<b class="status-ok">YES</b>' : '<b class="status-warn">N/A</b>';
+      document.getElementById('diagWasm').innerHTML = hasWasm ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
+      document.getElementById('diagIdb').innerHTML = hasIdb ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
+      document.getElementById('diagCores').innerText = cores;
+
+      log(`Diagnostics complete. Secure: ${isSecure}, Mic API: ${hasMic}`);
+      if (!isSecure) {
+        log('WARNING: Must be served over HTTPS for microphone access.');
+      }
+    }
+
+    // 2. Waveform Visualizer
+    function drawVisualizer() {
+      if (!analyser) return;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      function render() {
+        animFrameId = requestAnimationFrame(render);
+        analyser.getByteFrequencyData(dataArray);
+
+        canvasCtx.fillStyle = '#111827';
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const barWidth = (canvas.width / bufferLength) * 2.5;
+        let x = 0;
+
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (dataArray[i] / 255) * canvas.height;
+          canvasCtx.fillStyle = '#3b82f6';
+          canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+      }
+      render();
+    }
+
+    // 3. Screen Wake Lock (Keep screen on while recording)
+    async function requestWakeLock() {
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen');
+          log('Screen WakeLock active.');
+        }
+      } catch (err) {
+        log(`WakeLock warning: ${err.message}`);
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release().then(() => {
+          wakeLock = null;
+          log('Screen WakeLock released.');
+        });
+      }
+    }
+
+    // 4. Timer Logic
+    function startTimer() {
+      startTime = Date.now();
+      timerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        const mins = String(Math.floor(elapsed / 60)).padStart(2, '0');
+        const secs = String(elapsed % 60).padStart(2, '0');
+        timerDisplay.innerText = `${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function stopTimer() {
+      clearInterval(timerInterval);
+    }
+
+    // 5. Start Recording
+    async function startRecording() {
+      try {
+        audioChunks = [];
+        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Set up AudioContext & Analyser for visualizer
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(micStream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 64;
+        source.connect(analyser);
+
+        // MediaRecorder setup
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/mp4';
+
+        mediaRecorder = new MediaRecorder(micStream, { mimeType });
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            audioChunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          stopTimer();
+          releaseWakeLock();
+          cancelAnimationFrame(animFrameId);
+          
+          if (audioContext) audioContext.close();
+
+          const audioBlob = new Blob(audioChunks, { type: mimeType });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          audioPlayback.src = audioUrl;
+          audioPlayback.style.display = 'block';
+
+          log(`Recording finished. Size: ${(audioBlob.size / 1024).toFixed(1)} KB`);
+        };
+
+        mediaRecorder.start(250); // Collect chunk every 250ms
+        await requestWakeLock();
+        startTimer();
+        drawVisualizer();
+
+        recordBtn.classList.add('recording');
+        btnText.innerText = 'Stop Recording';
+        audioPlayback.style.display = 'none';
+        log(`Recording started using ${mimeType}`);
+
+      } catch (err) {
+        log(`Error accessing microphone: ${err.message}`);
+        alert('Could not access microphone. Please check permissions.');
+      }
+    }
+
+    // 6. Stop Recording
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+        if (micStream) {
+          micStream.getTracks().forEach(track => track.stop());
+        }
+        recordBtn.classList.remove('recording');
+        btnText.innerText = 'Start Recording';
+      }
+    }
+
+    // 7. Toggle Handler
+    recordBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+
+    // Initialize
+    window.addEventListener('DOMContentLoaded', () => {
+      canvas.width = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      runDiagnostics();
+    });
+  </script>
+</body>
+</html>
