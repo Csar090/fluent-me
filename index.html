@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 5: Quick Disfluency Tracker</title>
+  <title>Fluent Me - Layer 5: Automated Coach</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -162,27 +162,6 @@
       border-radius: 8px;
     }
 
-    /* Quick Tag Buttons */
-    .tag-bar {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 8px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-    }
-
-    .btn-quick-tag {
-      padding: 4px 10px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background-color: rgba(239, 68, 68, 0.15);
-      color: #fca5a5;
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
     .transcript-input {
       width: 100%;
       min-height: 90px;
@@ -233,6 +212,23 @@
     .metric-sub {
       font-size: 0.7rem;
       color: var(--text-muted);
+    }
+
+    .fillers-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .filler-tag {
+      background-color: rgba(239, 68, 68, 0.2);
+      border: 1px solid var(--danger);
+      color: #fca5a5;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 600;
     }
 
     .coach-box {
@@ -345,7 +341,7 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 5: Quick Disfluency Tracker</p>
+      <p>Layer 5: Automated Feedback Loop</p>
     </header>
 
     <div class="status-banner">
@@ -364,22 +360,12 @@
       <audio id="audioPlayback" controls style="display: none;"></audio>
     </div>
 
-    <!-- Transcript Box with Quick Tag Bar -->
+    <!-- Transcript Box -->
     <div class="card">
       <div class="card-title">
         <span>Transcript</span>
-        <span style="font-size: 0.7rem; color: var(--primary);">Tap button to tag disfluency</span>
+        <span style="font-size: 0.7rem; color: var(--primary);">✏️ Editable text</span>
       </div>
-
-      <!-- One-Tap Disfluency Tag Buttons -->
-      <div class="tag-bar">
-        <button class="btn-quick-tag" onclick="addTag('uh')">+ Uh</button>
-        <button class="btn-quick-tag" onclick="addTag('um')">+ Um</button>
-        <button class="btn-quick-tag" onclick="addTag('like')">+ Like</button>
-        <button class="btn-quick-tag" onclick="addTag('actually')">+ Actually</button>
-        <button class="btn-quick-tag" onclick="addTag('basically')">+ Basically</button>
-      </div>
-
       <textarea id="transcriptInput" class="transcript-input" placeholder="Your transcript will appear here..."></textarea>
     </div>
 
@@ -403,11 +389,13 @@
           <span class="metric-sub" id="mFillersRatio">0.0 / min</span>
         </div>
         <div class="metric-card">
-          <span class="metric-label">Hesitation Pauses</span>
+          <span class="metric-label">Vocal Hesitations</span>
           <span class="metric-value" id="mPauses">0</span>
-          <span class="metric-sub" id="mPausesSub">Gaps >0.4s</span>
+          <span class="metric-sub" id="mPausesSub">Um / Uh / Gaps</span>
         </div>
       </div>
+
+      <div class="fillers-list" id="fillersList"></div>
     </div>
 
     <!-- AI Coach -->
@@ -509,18 +497,13 @@
       modelBadge.className = `badge ${badgeClass}`;
     }
 
-    // Global Tag Insertion Function
-    window.addTag = function(word) {
-      const current = transcriptInput.value.trim();
-      transcriptInput.value = current ? `${current} ${word}` : word;
-      analyzeSpeech(transcriptInput.value, speechDurationSec || 10);
-      log(`Tagged disfluency: "${word}"`);
-    };
-
+    // Automated Acoustic Hesitation & Pitch Flatness Analyzer
     function detectAcousticHesitations(pcmData, sampleRate = 16000) {
-      const frameSize = Math.round(sampleRate * 0.1);
+      const frameSize = Math.round(sampleRate * 0.1); // 100ms frames
       let silentFrames = 0;
-      let hesitations = 0;
+      let flatToneFrames = 0;
+      let totalHesitations = 0;
+      let prevRms = 0;
 
       for (let i = 0; i < pcmData.length; i += frameSize) {
         let sum = 0;
@@ -532,13 +515,22 @@
         if (rms < 0.008) {
           silentFrames++;
         } else {
-          if (silentFrames >= 4) {
-            hesitations++;
+          // Detect flat, continuous vocal energy (um/uh vocalizations)
+          const rmsDelta = Math.abs(rms - prevRms);
+          if (rmsDelta < 0.005 && rms > 0.015) {
+            flatToneFrames++;
+          } else {
+            flatToneFrames = 0;
+          }
+
+          if (silentFrames >= 3 || flatToneFrames >= 3) { // >= 300ms hesitation gap or flat tone
+            totalHesitations++;
           }
           silentFrames = 0;
         }
+        prevRms = rms;
       }
-      return hesitations;
+      return totalHesitations;
     }
 
     function initDB() {
@@ -581,7 +573,7 @@
             <div class="history-item" data-id="${s.id}">
               <div>
                 <div class="history-title">${s.wpm} WPM • ${s.wordCount} words</div>
-                <div class="history-meta">${dateStr} • ${s.fillerCount} fillers • ${s.pauseCount || 0} pauses</div>
+                <div class="history-meta">${dateStr} • ${s.fillerCount} fillers • ${s.pauseCount || 0} hesitations</div>
               </div>
               <span style="color: var(--primary); font-size: 0.8rem;">View ›</span>
             </div>
@@ -607,17 +599,17 @@
       if (!metrics || !rawText) return;
 
       if (metrics.wpm >= 110 && metrics.wpm <= 150) {
-        coachStrength.innerText = `⭐ Strength: Excellent natural speaking velocity (${metrics.wpm} WPM).`;
+        coachStrength.innerText = `⭐ Strength: Optimal speaking speed (${metrics.wpm} WPM) with clear pacing.`;
       } else if (metrics.totalWords > 30) {
         coachStrength.innerText = `⭐ Strength: Good verbal elaboration (${metrics.totalWords} words spoken).`;
       } else {
-        coachStrength.innerText = `⭐ Strength: Clear articulation and delivery.`;
+        coachStrength.innerText = `⭐ Strength: Clear articulation and continuous audio stream.`;
       }
 
-      if (metrics.totalFillers >= 2) {
-        coachFocus.innerText = `🎯 Primary Focus: You used ${metrics.totalFillers} filler words ("uh", "um", "actually"). Focus on silent pauses.`;
-      } else if (metrics.pauseCount >= 3) {
-        coachFocus.innerText = `🎯 Primary Focus: Detected ${metrics.pauseCount} hesitation pauses. Maintain smooth sentence flow.`;
+      const totalDisfluency = metrics.totalFillers + metrics.pauseCount;
+
+      if (totalDisfluency >= 3) {
+        coachFocus.innerText = `🎯 Primary Focus: High disfluency count (${metrics.totalFillers} filler words + ${metrics.pauseCount} vocal hesitations/pauses). Focus on silent pauses between ideas.`;
       } else if (metrics.wpm < 100) {
         coachFocus.innerText = `🎯 Primary Focus: Speaking rate (${metrics.wpm} WPM) is slow. Continuous practice recommended.`;
       } else {
@@ -631,12 +623,12 @@
       cleaned = cleaned.replace(/\s+/g, ' ').trim();
       coachRewrite.innerText = `✏️ Better Version: "${cleaned}"`;
 
-      if (metrics.totalFillers >= 2) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Retell this topic in 45 seconds with 0 filler words."`;
-      } else if (metrics.pauseCount >= 3) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Answer a question continuously with zero pauses longer than 1 second."`;
+      if (totalDisfluency >= 3) {
+        coachChallenge.innerText = `🎙 Next Challenge: "Retell this topic in 45 seconds with 0 filler words and fewer than 2 hesitations."`;
+      } else if (metrics.wpm < 100) {
+        coachChallenge.innerText = `🎙 Next Challenge: "Speak continuously for 60 seconds aiming for 120-140 WPM."`;
       } else {
-        coachChallenge.innerText = `🎙 Next Challenge: "Describe a past event using clear storytelling transitions."`;
+        coachChallenge.innerText = `🎙 Next Challenge: "Describe a complex past event using clear storytelling transitions."`;
       }
     }
 
@@ -744,7 +736,7 @@
       mFillersRatio.innerText = `${(totalFillers / minutes).toFixed(1)} / min`;
 
       mPauses.innerText = detectedHesitationsCount;
-      mPausesSub.innerText = `${detectedHesitationsCount} gaps >0.4s`;
+      mPausesSub.innerText = `${detectedHesitationsCount} vocal/silent gaps`;
 
       currentMetrics = { totalWords, wpm, totalFillers, pauseCount: detectedHesitationsCount };
       saveSessionBtn.disabled = false;
@@ -885,7 +877,7 @@
       }
 
       detectedHesitationsCount = detectAcousticHesitations(pcm16k, 16000);
-      log(`Detected ${detectedHesitationsCount} signal hesitations.`);
+      log(`Automated Hesitations/Pauses detected: ${detectedHesitationsCount}`);
 
       try {
         setModelStatus('Transcribing...', 'PROCESSING', 'badge-busy');
