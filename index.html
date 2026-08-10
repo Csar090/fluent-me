@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 1 Test Shell</title>
+  <title>Fluent Me - Layer 2: Local STT</title>
   <style>
     :root {
       --bg-color: #121212;
       --card-bg: #1e1e1e;
       --primary: #3b82f6;
       --danger: #ef4444;
+      --success: #10b981;
       --text: #f3f4f6;
       --text-muted: #9ca3af;
       --border: #374151;
@@ -43,17 +44,16 @@
 
     header {
       text-align: center;
-      padding: 12px 0;
+      padding: 8px 0;
     }
 
     header h1 {
       font-size: 1.5rem;
       font-weight: 700;
-      color: #ffffff;
     }
 
     header p {
-      font-size: 0.875rem;
+      font-size: 0.85rem;
       color: var(--text-muted);
     }
 
@@ -65,41 +65,44 @@
     }
 
     .card-title {
-      font-size: 0.875rem;
+      font-size: 0.85rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.05em;
       color: var(--text-muted);
-      margin-bottom: 12px;
+      margin-bottom: 8px;
     }
 
-    /* Device Diagnostic Grid */
-    .diag-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      font-size: 0.8rem;
-    }
-
-    .diag-item {
+    /* Model Status Banner */
+    .status-banner {
       display: flex;
+      align-items: center;
       justify-content: space-between;
-      background-color: rgba(255, 255, 255, 0.03);
-      padding: 8px;
-      border-radius: 6px;
+      padding: 10px 14px;
+      background-color: rgba(59, 130, 246, 0.1);
+      border: 1px solid var(--primary);
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
     }
 
-    .status-ok { color: #10b981; }
-    .status-warn { color: #f59e0b; }
-    .status-fail { color: #ef4444; }
+    .badge {
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-loading { background-color: #f59e0b; color: #000; }
+    .badge-ready { background-color: var(--success); color: #000; }
+    .badge-busy { background-color: var(--primary); color: #fff; }
 
-    /* Recorder Controls */
+    /* Recorder Section */
     .recorder-box {
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 16px;
-      padding: 24px 16px;
+      padding: 20px 16px;
       text-align: center;
     }
 
@@ -109,10 +112,9 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* Visualizer Canvas */
     canvas {
       width: 100%;
-      height: 60px;
+      height: 50px;
       background-color: #111827;
       border-radius: 8px;
       border: 1px solid var(--border);
@@ -136,8 +138,10 @@
       transition: background-color 0.2s, transform 0.1s;
     }
 
-    .btn-record:active {
-      transform: scale(0.98);
+    .btn-record:disabled {
+      background-color: #4b5563;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
 
     .btn-record.recording {
@@ -153,8 +157,30 @@
 
     audio {
       width: 100%;
-      margin-top: 12px;
+      margin-top: 8px;
       border-radius: 8px;
+    }
+
+    /* Transcript Box */
+    .transcript-box {
+      min-height: 80px;
+      background-color: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      color: #e5e7eb;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .stats-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 8px;
     }
 
     .log-box {
@@ -162,9 +188,9 @@
       font-size: 0.75rem;
       background-color: #0d1117;
       color: #8b949e;
-      padding: 12px;
+      padding: 10px;
       border-radius: 8px;
-      max-height: 120px;
+      max-height: 100px;
       overflow-y: auto;
       white-space: pre-wrap;
     }
@@ -175,52 +201,68 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 1: Mobile Micro-Shell Test</p>
+      <p>Layer 2: Local AI Speech-to-Text</p>
     </header>
 
-    <!-- System Feasibility Report -->
-    <div class="card">
-      <div class="card-title">Device Diagnostics</div>
-      <div class="diag-grid" id="diagGrid">
-        <div class="diag-item"><span>Secure Context:</span> <span id="diagSecure">-</span></div>
-        <div class="diag-item"><span>Microphone:</span> <span id="diagMic">-</span></div>
-        <div class="diag-item"><span>WebGPU:</span> <span id="diagGpu">-</span></div>
-        <div class="diag-item"><span>WebAssembly:</span> <span id="diagWasm">-</span></div>
-        <div class="diag-item"><span>IndexedDB:</span> <span id="diagIdb">-</span></div>
-        <div class="diag-item"><span>CPU Cores:</span> <span id="diagCores">-</span></div>
-      </div>
+    <!-- Model Status -->
+    <div class="status-banner">
+      <span id="modelStatusText">Initializing local STT model...</span>
+      <span class="badge badge-loading" id="modelBadge">LOADING</span>
     </div>
 
-    <!-- Recorder Main Card -->
+    <!-- Recorder Card -->
     <div class="card recorder-box">
       <div class="timer" id="timerDisplay">00:00</div>
       
       <canvas id="visualizer"></canvas>
 
-      <button id="recordBtn" class="btn-record">
-        <span>🎙</span> <span id="btnText">Start Recording</span>
+      <button id="recordBtn" class="btn-record" disabled>
+        <span>🎙</span> <span id="btnText">Loading Model...</span>
       </button>
 
       <audio id="audioPlayback" controls style="display: none;"></audio>
     </div>
 
+    <!-- Transcript Results -->
+    <div class="card">
+      <div class="card-title">Live Transcript</div>
+      <div class="transcript-box" id="transcriptDisplay">Your transcript will appear here after recording...</div>
+      <div class="stats-row">
+        <span id="transcribeTimeStat">Inference Time: -</span>
+        <span id="audioDurationStat">Audio Length: -</span>
+      </div>
+    </div>
+
     <!-- Activity Log -->
     <div class="card">
-      <div class="card-title">Activity Log</div>
-      <div class="log-box" id="logBox">Initializing diagnostics...</div>
+      <div class="card-title">System Log</div>
+      <div class="log-box" id="logBox">Starting Layer 2 initialization...</div>
     </div>
   </div>
 
-  <script>
-    // System & DOM State
+  <!-- Load Transformers.js v2 from CDN -->
+  <script type="module">
+    import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+
+    // Disable remote model downloads after initial cache
+    env.allowLocalModels = false;
+
+    // DOM References
     const logBox = document.getElementById('logBox');
     const timerDisplay = document.getElementById('timerDisplay');
     const recordBtn = document.getElementById('recordBtn');
     const btnText = document.getElementById('btnText');
     const audioPlayback = document.getElementById('audioPlayback');
+    const transcriptDisplay = document.getElementById('transcriptDisplay');
+    const modelStatusText = document.getElementById('modelStatusText');
+    const modelBadge = document.getElementById('modelBadge');
+    const transcribeTimeStat = document.getElementById('transcribeTimeStat');
+    const audioDurationStat = document.getElementById('audioDurationStat');
     const canvas = document.getElementById('visualizer');
     const canvasCtx = canvas.getContext('2d');
 
+    // App State
+    let transcriber = null;
     let mediaRecorder = null;
     let audioChunks = [];
     let audioContext = null;
@@ -236,32 +278,40 @@
       logBox.innerText = `[${timestamp}] ${msg}\n` + logBox.innerText;
     }
 
-    // 1. Run Device Diagnostics
-    function runDiagnostics() {
-      const isSecure = window.isSecureContext;
-      const hasMic = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-      const hasGpu = !!navigator.gpu;
-      const hasWasm = typeof WebAssembly === 'object';
-      const hasIdb = !!window.indexedDB;
-      const cores = navigator.hardwareConcurrency || 'Unknown';
+    function setModelStatus(text, badgeText, badgeClass) {
+      modelStatusText.innerText = text;
+      modelBadge.innerText = badgeText;
+      modelBadge.className = `badge ${badgeClass}`;
+    }
 
-      document.getElementById('diagSecure').innerHTML = isSecure ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
-      document.getElementById('diagMic').innerHTML = hasMic ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
-      document.getElementById('diagGpu').innerHTML = hasGpu ? '<b class="status-ok">YES</b>' : '<b class="status-warn">N/A</b>';
-      document.getElementById('diagWasm').innerHTML = hasWasm ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
-      document.getElementById('diagIdb').innerHTML = hasIdb ? '<b class="status-ok">YES</b>' : '<b class="status-fail">NO</b>';
-      document.getElementById('diagCores').innerText = cores;
+    // 1. Load Whisper Model in Browser
+    async function initModel() {
+      try {
+        log('Downloading Whisper Tiny model (~39MB)...');
+        setModelStatus('Downloading Whisper Model...', 'DOWNLOADING', 'badge-loading');
 
-      log(`Diagnostics complete. Secure: ${isSecure}, Mic API: ${hasMic}`);
-      if (!isSecure) {
-        log('WARNING: Must be served over HTTPS for microphone access.');
+        transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny.en', {
+          progress_callback: (data) => {
+            if (data.status === 'progress') {
+              const pct = Math.round(data.progress || 0);
+              setModelStatus(`Loading Model (${pct}%)...`, 'LOADING', 'badge-loading');
+            }
+          }
+        });
+
+        log('Whisper model loaded successfully into browser memory.');
+        setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
+        recordBtn.disabled = false;
+        btnText.innerText = 'Start Recording';
+      } catch (err) {
+        log(`Model load error: ${err.message}`);
+        setModelStatus('Failed to load model', 'ERROR', 'badge-loading');
       }
     }
 
     // 2. Waveform Visualizer
     function drawVisualizer() {
       if (!analyser) return;
-
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
       
@@ -285,12 +335,11 @@
       render();
     }
 
-    // 3. Screen Wake Lock (Keep screen on while recording)
+    // 3. Screen Wake Lock
     async function requestWakeLock() {
       try {
         if ('wakeLock' in navigator) {
           wakeLock = await navigator.wakeLock.request('screen');
-          log('Screen WakeLock active.');
         }
       } catch (err) {
         log(`WakeLock warning: ${err.message}`);
@@ -299,14 +348,11 @@
 
     function releaseWakeLock() {
       if (wakeLock) {
-        wakeLock.release().then(() => {
-          wakeLock = null;
-          log('Screen WakeLock released.');
-        });
+        wakeLock.release().then(() => wakeLock = null);
       }
     }
 
-    // 4. Timer Logic
+    // 4. Timer
     function startTimer() {
       startTime = Date.now();
       timerInterval = setInterval(() => {
@@ -321,76 +367,124 @@
       clearInterval(timerInterval);
     }
 
-    // 5. Start Recording
+    // 5. Audio Blob to 16kHz PCM Array
+    async function convertBlobTo16kHzPCM(blob) {
+      const arrayBuffer = await blob.arrayBuffer();
+      const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+      tempCtx.close();
+
+      // OfflineContext to resample to 16000 Hz mono
+      const offlineCtx = new OfflineAudioContext(1, decodedBuffer.duration * 16000, 16000);
+      const source = offlineCtx.createBufferSource();
+      source.buffer = decodedBuffer;
+      source.connect(offlineCtx.destination);
+      source.start(0);
+
+      const resampledBuffer = await offlineCtx.startRendering();
+      return resampledBuffer.getChannelData(0); // Float32Array
+    }
+
+    // 6. Transcribe Audio
+    async function runTranscription(audioBlob) {
+      try {
+        setModelStatus('Transcribing Locally...', 'PROCESSING', 'badge-busy');
+        transcriptDisplay.innerText = 'Transcribing your voice on device...';
+        recordBtn.disabled = true;
+
+        const t0 = performance.now();
+        log('Converting audio to 16kHz PCM...');
+        const pcmData = await convertBlobTo16kHzPCM(audioBlob);
+
+        log('Running local Whisper inference...');
+        const output = await transcriber(pcmData, {
+          chunk_length_s: 30,
+          stride_length_s: 5,
+          language: 'english',
+          task: 'transcribe'
+        });
+
+        const t1 = performance.now();
+        const durationSec = (pcmData.length / 16000).toFixed(1);
+        const processSec = ((t1 - t0) / 1000).toFixed(2);
+
+        transcriptDisplay.innerText = output.text.trim() || '[No speech detected]';
+        transcribeTimeStat.innerText = `Inference Time: ${processSec}s`;
+        audioDurationStat.innerText = `Audio Length: ${durationSec}s`;
+
+        log(`Transcription done in ${processSec}s for ${durationSec}s audio.`);
+        setModelStatus('Local AI Model Ready', 'READY', 'badge-ready');
+
+      } catch (err) {
+        log(`Transcription error: ${err.message}`);
+        transcriptDisplay.innerText = 'Error processing speech locally.';
+        setModelStatus('Transcription Error', 'ERROR', 'badge-loading');
+      } finally {
+        recordBtn.disabled = false;
+      }
+    }
+
+    // 7. Start/Stop Recording
     async function startRecording() {
       try {
         audioChunks = [];
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-        // Set up AudioContext & Analyser for visualizer
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         const source = audioContext.createMediaStreamSource(micStream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 64;
         source.connect(analyser);
 
-        // MediaRecorder setup
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
           : 'audio/mp4';
 
         mediaRecorder = new MediaRecorder(micStream, { mimeType });
 
-        mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
-            audioChunks.push(event.data);
-          }
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
         };
 
-        mediaRecorder.onstop = () => {
+        mediaRecorder.onstop = async () => {
           stopTimer();
           releaseWakeLock();
           cancelAnimationFrame(animFrameId);
-          
           if (audioContext) audioContext.close();
 
           const audioBlob = new Blob(audioChunks, { type: mimeType });
-          const audioUrl = URL.createObjectURL(audioBlob);
-          audioPlayback.src = audioUrl;
+          audioPlayback.src = URL.createObjectURL(audioBlob);
           audioPlayback.style.display = 'block';
 
-          log(`Recording finished. Size: ${(audioBlob.size / 1024).toFixed(1)} KB`);
+          // Trigger local transcription
+          await runTranscription(audioBlob);
         };
 
-        mediaRecorder.start(250); // Collect chunk every 250ms
+        mediaRecorder.start(250);
         await requestWakeLock();
         startTimer();
         drawVisualizer();
 
         recordBtn.classList.add('recording');
-        btnText.innerText = 'Stop Recording';
+        btnText.innerText = 'Stop & Transcribe';
         audioPlayback.style.display = 'none';
-        log(`Recording started using ${mimeType}`);
+        log('Recording started.');
 
       } catch (err) {
-        log(`Error accessing microphone: ${err.message}`);
-        alert('Could not access microphone. Please check permissions.');
+        log(`Microphone error: ${err.message}`);
+        alert('Could not access microphone.');
       }
     }
 
-    // 6. Stop Recording
     function stopRecording() {
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
         mediaRecorder.stop();
-        if (micStream) {
-          micStream.getTracks().forEach(track => track.stop());
-        }
+        if (micStream) micStream.getTracks().forEach(t => t.stop());
         recordBtn.classList.remove('recording');
         btnText.innerText = 'Start Recording';
       }
     }
 
-    // 7. Toggle Handler
     recordBtn.addEventListener('click', () => {
       if (mediaRecorder && mediaRecorder.state === 'recording') {
         stopRecording();
@@ -399,11 +493,10 @@
       }
     });
 
-    // Initialize
     window.addEventListener('DOMContentLoaded', () => {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
-      runDiagnostics();
+      initModel();
     });
   </script>
 </body>
