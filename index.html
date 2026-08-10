@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Fluent Me - Layer 5: Adaptive Coach</title>
+  <title>Fluent Me - Layer 5: Quick Disfluency Tracker</title>
   <style>
     :root {
       --bg-color: #121212;
@@ -162,6 +162,27 @@
       border-radius: 8px;
     }
 
+    /* Quick Tag Buttons */
+    .tag-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .btn-quick-tag {
+      padding: 4px 10px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background-color: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
     .transcript-input {
       width: 100%;
       min-height: 90px;
@@ -214,7 +235,6 @@
       color: var(--text-muted);
     }
 
-    /* Coach Box */
     .coach-box {
       display: flex;
       flex-direction: column;
@@ -325,7 +345,7 @@
   <div class="container">
     <header>
       <h1>FLUENT ME</h1>
-      <p>Layer 5: AI Coach & Challenges</p>
+      <p>Layer 5: Quick Disfluency Tracker</p>
     </header>
 
     <div class="status-banner">
@@ -344,12 +364,22 @@
       <audio id="audioPlayback" controls style="display: none;"></audio>
     </div>
 
-    <!-- Transcript Box -->
+    <!-- Transcript Box with Quick Tag Bar -->
     <div class="card">
       <div class="card-title">
         <span>Transcript</span>
-        <span style="font-size: 0.7rem; color: var(--primary);">✏️ Tap to edit text</span>
+        <span style="font-size: 0.7rem; color: var(--primary);">Tap button to tag disfluency</span>
       </div>
+
+      <!-- One-Tap Disfluency Tag Buttons -->
+      <div class="tag-bar">
+        <button class="btn-quick-tag" onclick="addTag('uh')">+ Uh</button>
+        <button class="btn-quick-tag" onclick="addTag('um')">+ Um</button>
+        <button class="btn-quick-tag" onclick="addTag('like')">+ Like</button>
+        <button class="btn-quick-tag" onclick="addTag('actually')">+ Actually</button>
+        <button class="btn-quick-tag" onclick="addTag('basically')">+ Basically</button>
+      </div>
+
       <textarea id="transcriptInput" class="transcript-input" placeholder="Your transcript will appear here..."></textarea>
     </div>
 
@@ -375,12 +405,12 @@
         <div class="metric-card">
           <span class="metric-label">Hesitation Pauses</span>
           <span class="metric-value" id="mPauses">0</span>
-          <span class="metric-sub" id="mPausesSub">Pauses >0.5s</span>
+          <span class="metric-sub" id="mPausesSub">Gaps >0.4s</span>
         </div>
       </div>
     </div>
 
-    <!-- AI Coach Insights -->
+    <!-- AI Coach -->
     <div class="card">
       <div class="card-title">AI Speaking Coach</div>
       <div class="coach-box" id="coachBox">
@@ -395,7 +425,7 @@
       </div>
     </div>
 
-    <!-- History & Data Management -->
+    <!-- History -->
     <div class="card">
       <div class="card-title">
         <span>Saved Sessions</span>
@@ -411,7 +441,7 @@
       </div>
     </div>
 
-    <!-- System Log -->
+    <!-- Log -->
     <div class="card">
       <div class="card-title">System Log</div>
       <div class="log-box" id="logBox">Initializing Local Database...</div>
@@ -438,7 +468,6 @@
     const canvas = document.getElementById('visualizer');
     const canvasCtx = canvas.getContext('2d');
 
-    // Metrics DOM
     const mRate = document.getElementById('mRate');
     const mRateSub = document.getElementById('mRateSub');
     const mWords = document.getElementById('mWords');
@@ -448,7 +477,6 @@
     const mPauses = document.getElementById('mPauses');
     const mPausesSub = document.getElementById('mPausesSub');
 
-    // Coach DOM
     const coachStrength = document.getElementById('coachStrength');
     const coachFocus = document.getElementById('coachFocus');
     const coachRewrite = document.getElementById('coachRewrite');
@@ -469,7 +497,7 @@
     let timerInterval = null;
     let wakeLock = null;
 
-    const FILLER_WORDS = ['actually', 'basically', 'like', 'you know', 'um', 'uh', 'literally', 'honestly', 'i mean', 'so', 'a', 'er', 'ah'];
+    const FILLER_WORDS = ['actually', 'basically', 'like', 'you know', 'um', 'uh', 'literally', 'honestly', 'i mean', 'so'];
 
     function log(msg) {
       logBox.innerText = `[${new Date().toLocaleTimeString()}] ${msg}\n` + logBox.innerText;
@@ -481,7 +509,14 @@
       modelBadge.className = `badge ${badgeClass}`;
     }
 
-    // Improved Signal Hesitation Detector
+    // Global Tag Insertion Function
+    window.addTag = function(word) {
+      const current = transcriptInput.value.trim();
+      transcriptInput.value = current ? `${current} ${word}` : word;
+      analyzeSpeech(transcriptInput.value, speechDurationSec || 10);
+      log(`Tagged disfluency: "${word}"`);
+    };
+
     function detectAcousticHesitations(pcmData, sampleRate = 16000) {
       const frameSize = Math.round(sampleRate * 0.1);
       let silentFrames = 0;
@@ -497,7 +532,7 @@
         if (rms < 0.008) {
           silentFrames++;
         } else {
-          if (silentFrames >= 4) { // >= 400ms gap
+          if (silentFrames >= 4) {
             hesitations++;
           }
           silentFrames = 0;
@@ -568,31 +603,27 @@
       };
     }
 
-    // AI Coach Logic Generator
     function generateCoachInsights(metrics, rawText) {
       if (!metrics || !rawText) return;
 
-      // 1. Evaluate Strengths
       if (metrics.wpm >= 110 && metrics.wpm <= 150) {
-        coachStrength.innerText = `⭐ Strength: Excellent natural speaking velocity (${metrics.wpm} WPM). Your pacing is optimal.`;
+        coachStrength.innerText = `⭐ Strength: Excellent natural speaking velocity (${metrics.wpm} WPM).`;
       } else if (metrics.totalWords > 30) {
-        coachStrength.innerText = `⭐ Strength: Good verbal elaboration (${metrics.totalWords} words spoken). You sustained continuous speech.`;
+        coachStrength.innerText = `⭐ Strength: Good verbal elaboration (${metrics.totalWords} words spoken).`;
       } else {
-        coachStrength.innerText = `⭐ Strength: Clear pronunciation and articulate delivery.`;
+        coachStrength.innerText = `⭐ Strength: Clear articulation and delivery.`;
       }
 
-      // 2. Identify Primary Focus / Bottleneck
       if (metrics.totalFillers >= 2) {
-        coachFocus.innerText = `🎯 Primary Focus: You used ${metrics.totalFillers} filler words ("actually", "basically", "like"). Practice replacing filler words with silent pauses.`;
+        coachFocus.innerText = `🎯 Primary Focus: You used ${metrics.totalFillers} filler words ("uh", "um", "actually"). Focus on silent pauses.`;
       } else if (metrics.pauseCount >= 3) {
-        coachFocus.innerText = `🎯 Primary Focus: Detected ${metrics.pauseCount} hesitation pauses. Focus on maintaining a smooth, uninterrupted sentence flow.`;
+        coachFocus.innerText = `🎯 Primary Focus: Detected ${metrics.pauseCount} hesitation pauses. Maintain smooth sentence flow.`;
       } else if (metrics.wpm < 100) {
-        coachFocus.innerText = `🎯 Primary Focus: Your speaking speed (${metrics.wpm} WPM) is slow. Focus on continuous idea transition.`;
+        coachFocus.innerText = `🎯 Primary Focus: Speaking rate (${metrics.wpm} WPM) is slow. Continuous practice recommended.`;
       } else {
-        coachFocus.innerText = `🎯 Primary Focus: Maintain your current optimal pacing and sentence structure.`;
+        coachFocus.innerText = `🎯 Primary Focus: Maintain current pacing and clear sentence structures.`;
       }
 
-      // 3. Generate Better Version / Rewrite
       let cleaned = rawText;
       FILLER_WORDS.forEach(f => {
         cleaned = cleaned.replace(new RegExp(`\\b${f}\\b`, 'gi'), '');
@@ -600,15 +631,12 @@
       cleaned = cleaned.replace(/\s+/g, ' ').trim();
       coachRewrite.innerText = `✏️ Better Version: "${cleaned}"`;
 
-      // 4. Assign Next Challenge
       if (metrics.totalFillers >= 2) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Retell this same topic in 45 seconds with 0 filler words."`;
+        coachChallenge.innerText = `🎙 Next Challenge: "Retell this topic in 45 seconds with 0 filler words."`;
       } else if (metrics.pauseCount >= 3) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Answer a rapid question continuously with zero pauses longer than 1 second."`;
-      } else if (metrics.wpm < 100) {
-        coachChallenge.innerText = `🎙 Next Challenge: "Speak continuously for 60 seconds aiming for 120-140 WPM."`;
+        coachChallenge.innerText = `🎙 Next Challenge: "Answer a question continuously with zero pauses longer than 1 second."`;
       } else {
-        coachChallenge.innerText = `🎙 Next Challenge: "Describe a complex past event using clear storytelling transitions."`;
+        coachChallenge.innerText = `🎙 Next Challenge: "Describe a past event using clear storytelling transitions."`;
       }
     }
 
@@ -721,7 +749,6 @@
       currentMetrics = { totalWords, wpm, totalFillers, pauseCount: detectedHesitationsCount };
       saveSessionBtn.disabled = false;
 
-      // Generate AI Coaching Insights
       generateCoachInsights(currentMetrics, cleanText);
     }
 
@@ -858,10 +885,10 @@
       }
 
       detectedHesitationsCount = detectAcousticHesitations(pcm16k, 16000);
-      log(`Detected ${detectedHesitationsCount} hesitations/pauses.`);
+      log(`Detected ${detectedHesitationsCount} signal hesitations.`);
 
       try {
-        setModelStatus('Transcribing Locally...', 'PROCESSING', 'badge-busy');
+        setModelStatus('Transcribing...', 'PROCESSING', 'badge-busy');
         transcriptInput.value = 'Transcribing on device...';
 
         const t0 = performance.now();
