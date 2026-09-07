@@ -1,4 +1,4 @@
-const CACHE='fluency-os-v1.6.2';
+const CACHE='fluency-os-v1.7.0';
 const FILES=['./','index.html','styles.css','app.js','enhancements.js','cloud.js','manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(xs=>Promise.all(xs.filter(x=>x!==CACHE).map(x=>caches.delete(x))))));

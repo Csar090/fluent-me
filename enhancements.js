@@ -1,7 +1,7 @@
 (function(){
   let segments=[],lastMetrics=null;
   const originalTranscribe=transcribeRecordedAudio;
-  transcribeRecordedAudio=async function(){await originalTranscribe();parseSegments();enhanceReview()};
+  transcribeRecordedAudio=async function(){await originalTranscribe();parseSegments();enhanceReview();$('redoTranscriptBtn').hidden=!blob};
 
   function parseClock(s){const p=s.split(':').map(Number);return (p[0]||0)*60+(p[1]||0)}
   function parseSegments(){
@@ -46,7 +46,7 @@
     enhanceReview();const keep=$('retainAudio').checked,group=$('groupId').value||crypto.randomUUID(),attempt=Number($('attemptNo').value)||1;
     const row={id:crypto.randomUUID(),groupId:group,attempt:attempt,createdAt:new Date().toISOString(),title:$('title').value.trim(),context:$('context').value,audience:$('audience').value.trim(),duration:duration,transcript:$('transcript').value.trim(),timestampedTranscript:$('timestampedTranscript').value.trim(),segments:segments,reflection:$('reflection').value.trim(),tags:$('tags').value.trim(),metrics:lastMetrics,audio:keep?blob:null,audioType:keep&&blob?blob.type:''};
     await put(row);toast('Sample saved on this device');await renderEnhanced();
-    const defaults={title:row.title,context:row.context,audience:row.audience};reset();segments=[];$('reviewPanel').hidden=true;$('repeatBtn').hidden=true;parseSegments();
+    const defaults={title:row.title,context:row.context,audience:row.audience};reset();segments=[];$('reviewPanel').hidden=true;$('repeatBtn').hidden=true;$('redoTranscriptBtn').hidden=true;parseSegments();
     if(repeat){$('title').value=defaults.title;$('context').value=defaults.context;$('audience').value=defaults.audience;$('groupId').value=group;$('attemptNo').value=attempt+1;$('attemptBadge').textContent='Attempt '+(attempt+1);await compareGroup(group)}else{$('groupId').value=crypto.randomUUID();$('attemptNo').value=1;$('attemptBadge').textContent='Attempt 1'}
   }
   async function compareGroup(group){const rows=(await all()).filter(r=>r.groupId===group).sort((a,b)=>a.attempt-b.attempt),p=$('comparePanel');if(rows.length<2){p.hidden=true;return}const a=rows[rows.length-2],b=rows[rows.length-1];p.hidden=false;$('compareContent').innerHTML=compareTable(a,b)}
@@ -80,5 +80,6 @@
     $('librarySearch').oninput=renderEnhanced;$('libraryContext').onchange=renderEnhanced;
     $('exportBtn').onclick=fullBackup;$('fullBackupBtn').onclick=fullBackup;
     $('restoreBtn').onclick=function(){$('restoreInput').click()};
+    $('redoTranscriptBtn').onclick=async function(){if(!blob)return toast('The recording is no longer available. Record again or open retained audio from the Library.');$('transcript').value='';$('timestampedTranscript').value='';await transcribeRecordedAudio()};
   });
 })();

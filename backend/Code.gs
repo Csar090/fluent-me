@@ -3,7 +3,7 @@ const APP = {
   jobs: 'AI_Jobs',
   database: 'Fluency OS Database',
   audioFolder: 'Fluency OS - Temporary Audio',
-  defaultModel: 'gemini-2.5-flash',
+  defaultModel: 'gemini-3.5-flash-lite',
   headers: ['id','createdAt','groupId','attempt','title','context','audience','duration','transcript','timestampedTranscript','segmentsJson','reflection','tags','metricsJson','audioFileId','audioDeleteAfter','aiStatus','aiReview','updatedAt']
 };
 
@@ -121,8 +121,10 @@ function callGemini_(transcript, metrics, rubric) {
   const payload = {contents:[{role:'user',parts:[{text:system+'\n\nObjective metrics:\n'+JSON.stringify(metrics)+'\n\nTranscript:\n'+transcript}]}],generationConfig:{temperature:0.25,responseMimeType:'application/json'}};
   const request = {method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true};
   let response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key),request);
-  if (response.getResponseCode() === 404 && model !== APP.defaultModel) {
-    response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(APP.defaultModel)+':generateContent?key='+encodeURIComponent(key),request);
+  if (response.getResponseCode() === 404) {
+    const available = listGenerateModels_(key);
+    const fallback = available.indexOf(APP.defaultModel) >= 0 ? APP.defaultModel : available[0];
+    if (fallback && fallback !== model) response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(fallback)+':generateContent?key='+encodeURIComponent(key),request);
   }
   if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) throw new Error('Gemini HTTP '+response.getResponseCode()+': '+response.getContentText().slice(0,500));
   const data = JSON.parse(response.getContentText()), text = data.candidates && data.candidates[0] && data.candidates[0].content.parts[0].text;
@@ -153,8 +155,10 @@ function cleanupExpiredAudio() {
 
 function health_() {
   const p=PropertiesService.getScriptProperties();
-  return {ok:true,database:true,drive:true,geminiConfigured:Boolean(p.getProperty('GEMINI_API_KEY')),retentionDays:Number(p.getProperty('AUDIO_RETENTION_DAYS')||7),model:p.getProperty('GEMINI_MODEL')||APP.defaultModel};
+  const key=p.getProperty('GEMINI_API_KEY');
+  return {ok:true,database:true,drive:true,geminiConfigured:Boolean(key),retentionDays:Number(p.getProperty('AUDIO_RETENTION_DAYS')||7),model:p.getProperty('GEMINI_MODEL')||APP.defaultModel,availableModels:key?listGenerateModels_(key):[]};
 }
+function listGenerateModels_(key){try{const r=UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key),{muteHttpExceptions:true});if(r.getResponseCode()!==200)return[];return(JSON.parse(r.getContentText()).models||[]).filter(m=>(m.supportedGenerationMethods||[]).indexOf('generateContent')>=0).map(m=>String(m.name||'').replace(/^models\//,''))}catch(e){return[]}}
 function authorized_(token){const expected=PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');return Boolean(expected&&token&&Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token)).join(',')===Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(expected)).join(','))}
 function sheet_(name){const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));return ss.getSheetByName(name)}
 function ensureSheet_(ss,name,headers){let s=ss.getSheetByName(name);if(!s)s=ss.insertSheet(name);if(s.getLastRow()===0)s.appendRow(headers);return s}
