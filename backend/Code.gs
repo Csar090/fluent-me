@@ -22,12 +22,14 @@ function setup() {
   }, false);
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'cleanupExpiredAudio').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('cleanupExpiredAudio').timeBased().everyDays(1).atHour(2).create();
-  return {
+  const result = {
     spreadsheetUrl: ss.getUrl(),
     audioFolderUrl: folder.getUrl(),
     accessToken: props.getProperty('ACCESS_TOKEN'),
     next: 'Add GEMINI_API_KEY in Project Settings → Script properties, then deploy as a web app.'
   };
+  console.log(JSON.stringify(result, null, 2));
+  return result;
 }
 
 function doGet(e) {
