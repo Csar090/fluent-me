@@ -87,7 +87,7 @@
       <h3>Cloud database & AI</h3>
       <label>Google backend URL<input id="cloudUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
       <label>Private access token<input id="cloudToken" type="password" autocomplete="off" placeholder="Token returned by backend setup()"></label>
-      <div class="grid"><label>Audio retention<select id="retentionDays"><option value="7">7 days</option><option value="15">15 days</option></select></label><label>Gemini model<input id="geminiModel" value="gemini-2.5-flash"></label></div>
+      <div class="grid"><label>Audio retention<select id="retentionDays"><option value="7">7 days</option><option value="15">15 days</option></select></label><label>Gemini model<select id="geminiModel"><option value="gemini-2.5-flash">Gemini 2.5 Flash (stable)</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option><option value="gemini-3.5-flash">Gemini 3.5 Flash</option></select></label></div>
       <fieldset><legend>AI evaluation criteria</legend>
         <label class="check"><input class="criterion" type="checkbox" value="structure" checked> Structure</label>
         <label class="check"><input class="criterion" type="checkbox" value="clarity" checked> Clarity</label>

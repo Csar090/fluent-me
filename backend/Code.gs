@@ -119,7 +119,11 @@ function callGemini_(transcript, metrics, rubric) {
     'Custom instruction: ' + String(rubric.custom || 'None')
   ].join('\n');
   const payload = {contents:[{role:'user',parts:[{text:system+'\n\nObjective metrics:\n'+JSON.stringify(metrics)+'\n\nTranscript:\n'+transcript}]}],generationConfig:{temperature:0.25,responseMimeType:'application/json'}};
-  const response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key),{method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true});
+  const request = {method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true};
+  let response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key),request);
+  if (response.getResponseCode() === 404 && model !== APP.defaultModel) {
+    response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(APP.defaultModel)+':generateContent?key='+encodeURIComponent(key),request);
+  }
   if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) throw new Error('Gemini HTTP '+response.getResponseCode()+': '+response.getContentText().slice(0,500));
   const data = JSON.parse(response.getContentText()), text = data.candidates && data.candidates[0] && data.candidates[0].content.parts[0].text;
   if (!text) throw new Error('Gemini returned no review.');
