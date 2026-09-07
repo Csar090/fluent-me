@@ -47,7 +47,8 @@
         <div class="coach strength"><b>What worked</b><span id="coachStrength"></span></div>
         <div class="coach focus"><b>One lever</b><span id="coachFocus"></span></div>
         <div class="coach challenge"><b>Next challenge</b><span id="coachChallenge"></span></div>
-        <button id="copyCoachBtn">Copy review prompt for ChatGPT</button>
+        <div class="button-row"><button id="aiReviewBtn" class="primary">Review with Gemini AI</button><button id="copyCoachBtn">Copy review prompt</button></div>
+        <div id="aiStatus" class="note"></div><div id="aiResult" class="ai-result" hidden></div>
       </div>
       <label>My reflection<textarea id="reflection" rows="3" placeholder="What worked? What is the one lever for next time?"></textarea></label>
       <label>Tags<input id="tags" placeholder="executive-presence, structure"></label>
@@ -83,6 +84,21 @@
       <label class="check"><input id="liveTranscript" type="checkbox" checked> Try live browser transcription</label>
       <label class="check"><input id="localTranscript" type="checkbox" checked> Use private on-device transcription and timestamps</label>
       <p class="note">The first on-device transcription downloads a small language model. Later sessions reuse the cache.</p>
+      <h3>Cloud database & AI</h3>
+      <label>Google backend URL<input id="cloudUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+      <label>Private access token<input id="cloudToken" type="password" autocomplete="off" placeholder="Token returned by backend setup()"></label>
+      <div class="grid"><label>Audio retention<select id="retentionDays"><option value="7">7 days</option><option value="15">15 days</option></select></label><label>Gemini model<input id="geminiModel" value="gemini-2.5-flash"></label></div>
+      <fieldset><legend>AI evaluation criteria</legend>
+        <label class="check"><input class="criterion" type="checkbox" value="structure" checked> Structure</label>
+        <label class="check"><input class="criterion" type="checkbox" value="clarity" checked> Clarity</label>
+        <label class="check"><input class="criterion" type="checkbox" value="articulation" checked> Articulation</label>
+        <label class="check"><input class="criterion" type="checkbox" value="concision" checked> Concision</label>
+        <label class="check"><input class="criterion" type="checkbox" value="executivePresence" checked> Executive presence</label>
+        <label class="check"><input class="criterion" type="checkbox" value="authenticity" checked> Authenticity</label>
+      </fieldset>
+      <label>Custom coaching instruction<textarea id="aiCustom" rows="3" placeholder="Example: Focus on conclusion-first communication for senior stakeholders."></textarea></label>
+      <div class="button-row"><button id="saveCloudBtn">Save configuration</button><button id="testCloudBtn">Test connection</button><button id="syncCloudBtn">Sync history</button></div>
+      <p id="cloudStatus" class="note">Cloud backend is not configured. Local recording remains available.</p>
       <h3>Backup & restore</h3>
       <p class="note">Backup includes session data and retained audio. Store the downloaded file in Google Drive if you want an off-device copy.</p>
       <div class="button-row"><button id="fullBackupBtn">Download full backup</button><button id="restoreBtn">Restore backup</button></div>
@@ -95,5 +111,6 @@
 <div id="toast"></div>
 <script src="app.js"></script>
 <script src="enhancements.js"></script>
+<script src="cloud.js"></script>
 </body>
 </html>
