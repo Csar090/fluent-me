@@ -1,13 +1,99 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#17233c"><link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="styles.css"><title>Fluency OS</title></head><body>
-<header><div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1></div><button id="exportBtn">Export</button></header>
-<nav><button class="active" data-tab="capture">Capture</button><button data-tab="library">Library</button><button data-tab="progress">Progress</button><button data-tab="settings">Settings</button></nav>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17233c">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+  <title>Fluency OS</title>
+</head>
+<body>
+<header>
+  <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1></div>
+  <button id="exportBtn">Backup</button>
+</header>
+<nav>
+  <button class="active" data-tab="capture">Capture</button>
+  <button data-tab="library">Library</button>
+  <button data-tab="progress">Progress</button>
+  <button data-tab="settings">Settings</button>
+</nav>
 <main>
-<section id="capture" class="tab active"><article class="card hero"><span class="eyebrow">QUICK LOG</span><h2>Record a communication sample</h2>
-<label>Title<input id="title" placeholder="Quarter-end meeting reflection"></label><div class="grid"><label>Context<select id="context"><option>Work meeting</option><option>Presentation</option><option>Conversation</option><option>Interview</option><option>Storytelling</option><option>Self-practice</option></select></label><label>Audience<input id="audience" placeholder="CFO and project team"></label></div>
-<div class="recorder"><div id="pulse" class="pulse"></div><strong id="timer">00:00</strong><span id="status">Ready</span></div><button id="recordBtn" class="record">● Start recording</button><audio id="playback" controls hidden></audio>
-<p id="support" class="note"></p><label>Transcript<textarea id="transcript" rows="9" placeholder="Your recorded audio will be transcribed after you stop. You can edit the final transcript."></textarea></label><label>Timestamped transcript<textarea id="timestampedTranscript" rows="6" readonly placeholder="Timestamped speech segments will appear here after transcription."></textarea></label><div id="metrics" class="metrics"><span>0 words</span><span>0 fillers</span><span>— WPM</span></div>
-<label>My reflection<textarea id="reflection" rows="3" placeholder="What worked? What is the one lever for next time?"></textarea></label><label>Tags<input id="tags" placeholder="executive-presence, structure"></label><label class="check"><input id="retainAudio" type="checkbox" checked> Retain audio on this device</label><button id="saveBtn" class="primary">Save sample locally</button></article></section>
-<section id="library" class="tab"><article class="card"><h2>Saved samples</h2><div id="samples"></div></article></section>
-<section id="progress" class="tab"><div class="stats"><div><b id="sampleCount">0</b><span>samples</span></div><div><b id="totalMinutes">0</b><span>minutes</span></div><div><b id="avgFillers">—</b><span>fillers / 100</span></div></div><article class="card"><h2>Your baseline</h2><p class="note">Progress is compared primarily against your own prior samples—not a generic ideal.</p><canvas id="chart" width="700" height="260"></canvas></article></section>
-<section id="settings" class="tab"><article class="card"><h2>Privacy & settings</h2><p>Everything is stored in this browser using IndexedDB. GitHub hosts only the app code.</p><label>Filler words<textarea id="fillerWords" rows="3">um,uh,like,you know,basically,actually,so,I mean,kind of</textarea></label><label class="check"><input id="liveTranscript" type="checkbox" checked> Try live browser transcription</label><label class="check"><input id="localTranscript" type="checkbox" checked> Use private on-device transcription when live transcription is unavailable</label><p class="note">The first on-device transcription downloads a small language model. Keep this page open until it finishes; later sessions reuse the cached model.</p><button id="deleteAll" class="danger">Delete all local data</button></article></section>
-</main><div id="toast"></div><script src="app.js"></script></body></html>
+  <section id="capture" class="tab active">
+    <article class="card hero">
+      <span class="eyebrow">RECORD → REVIEW → PRACTISE → COMPARE</span>
+      <h2>Record a communication sample</h2>
+      <label>Title<input id="title" placeholder="Quarter-end meeting reflection"></label>
+      <div class="grid">
+        <label>Context<select id="context"><option>Work meeting</option><option>Presentation</option><option>Conversation</option><option>Interview</option><option>Storytelling</option><option>Self-practice</option></select></label>
+        <label>Audience<input id="audience" placeholder="CFO and project team"></label>
+      </div>
+      <input id="groupId" type="hidden"><input id="attemptNo" type="hidden" value="1">
+      <div class="attempt-badge" id="attemptBadge">Attempt 1</div>
+      <div class="recorder"><div id="pulse" class="pulse"></div><strong id="timer">00:00</strong><span id="status">Ready</span></div>
+      <button id="recordBtn" class="record">● Start recording</button>
+      <audio id="playback" controls hidden></audio>
+      <p id="support" class="note"></p>
+      <label>Transcript<textarea id="transcript" rows="8" placeholder="Your recorded audio will be transcribed after you stop. You can edit the final transcript."></textarea></label>
+      <div id="highlightedTranscript" class="transcript-view empty">Filler highlighting appears here after transcription.</div>
+      <label>Timestamped transcript</label>
+      <div id="timestampSegments" class="segments empty">Timestamped speech segments will appear here. Tap a segment to play from that point.</div>
+      <textarea id="timestampedTranscript" hidden></textarea>
+      <div id="metrics" class="metrics"></div>
+      <div id="reviewPanel" class="review-panel" hidden>
+        <h3>Session review</h3>
+        <div id="reviewSnapshot" class="review-grid"></div>
+        <div class="coach strength"><b>What worked</b><span id="coachStrength"></span></div>
+        <div class="coach focus"><b>One lever</b><span id="coachFocus"></span></div>
+        <div class="coach challenge"><b>Next challenge</b><span id="coachChallenge"></span></div>
+        <button id="copyCoachBtn">Copy review prompt for ChatGPT</button>
+      </div>
+      <label>My reflection<textarea id="reflection" rows="3" placeholder="What worked? What is the one lever for next time?"></textarea></label>
+      <label>Tags<input id="tags" placeholder="executive-presence, structure"></label>
+      <label class="check"><input id="retainAudio" type="checkbox" checked> Retain audio on this device</label>
+      <div class="button-row"><button id="saveBtn" class="primary">Save sample</button><button id="repeatBtn" hidden>Save & record again</button></div>
+    </article>
+    <article id="comparePanel" class="card" hidden>
+      <span class="eyebrow">ATTEMPT COMPARISON</span><h2>What changed?</h2>
+      <div id="compareContent"></div>
+    </article>
+  </section>
+
+  <section id="library" class="tab">
+    <article class="card">
+      <h2>Saved samples</h2>
+      <div class="grid"><label>Search<input id="librarySearch" placeholder="Title, context, audience or tag"></label><label>Context<select id="libraryContext"><option value="">All contexts</option><option>Work meeting</option><option>Presentation</option><option>Conversation</option><option>Interview</option><option>Storytelling</option><option>Self-practice</option></select></label></div>
+      <div id="samples"></div>
+    </article>
+  </section>
+
+  <section id="progress" class="tab">
+    <div class="stats"><div><b id="sampleCount">0</b><span>samples</span></div><div><b id="totalMinutes">0</b><span>minutes</span></div><div><b id="avgFillers">—</b><span>fillers / 100</span></div></div>
+    <article class="card"><h2>Your baseline</h2><p class="note">Compared against your own earlier attempts—not a generic ideal.</p><canvas id="chart" width="700" height="260"></canvas></article>
+    <article class="card"><h2>Weekly summary</h2><div id="weeklySummary" class="review-grid"></div></article>
+  </section>
+
+  <section id="settings" class="tab">
+    <article class="card">
+      <h2>Privacy & settings</h2>
+      <p>Sessions remain in this browser using IndexedDB. GitHub hosts only the app code.</p>
+      <label>Filler words<textarea id="fillerWords" rows="3">um,uh,like,you know,basically,actually,so,I mean,kind of</textarea></label>
+      <label>Long pause threshold (seconds)<input id="pauseThreshold" type="number" min="0.5" max="5" step="0.1" value="1"></label>
+      <label class="check"><input id="liveTranscript" type="checkbox" checked> Try live browser transcription</label>
+      <label class="check"><input id="localTranscript" type="checkbox" checked> Use private on-device transcription and timestamps</label>
+      <p class="note">The first on-device transcription downloads a small language model. Later sessions reuse the cache.</p>
+      <h3>Backup & restore</h3>
+      <p class="note">Backup includes session data and retained audio. Store the downloaded file in Google Drive if you want an off-device copy.</p>
+      <div class="button-row"><button id="fullBackupBtn">Download full backup</button><button id="restoreBtn">Restore backup</button></div>
+      <input id="restoreInput" type="file" accept=".json,application/json" hidden>
+      <button id="deleteAll" class="danger">Delete all local data</button>
+    </article>
+  </section>
+</main>
+<dialog id="sessionDialog"><button id="closeDialog" class="dialog-close">Close</button><div id="sessionDetail"></div></dialog>
+<div id="toast"></div>
+<script src="app.js"></script>
+<script src="enhancements.js"></script>
+</body>
+</html>
