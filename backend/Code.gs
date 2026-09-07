@@ -10,6 +10,7 @@ const APP = {
 function setup() {
   const props = PropertiesService.getScriptProperties();
   let ss = props.getProperty('SHEET_ID') ? SpreadsheetApp.openById(props.getProperty('SHEET_ID')) : SpreadsheetApp.create(APP.database);
+  ss.setSpreadsheetTimeZone('Asia/Kolkata');
   let folder = props.getProperty('FOLDER_ID') ? DriveApp.getFolderById(props.getProperty('FOLDER_ID')) : DriveApp.createFolder(APP.audioFolder);
   ensureSheet_(ss, APP.sessions, APP.headers);
   ensureSheet_(ss, APP.jobs, ['jobId','createdAt','status','result','error']);
@@ -68,7 +69,7 @@ function saveSession_(s) {
       const bytes = Utilities.base64Decode(match[2]), ext = match[1].indexOf('mp4') >= 0 ? 'm4a' : 'webm';
       const file = DriveApp.getFolderById(props.getProperty('FOLDER_ID')).createFile(Utilities.newBlob(bytes, match[1], safe_(s.title) + '-' + s.id + '.' + ext));
       audioId = file.getId();
-      deleteAfter = new Date(Date.now() + Number(props.getProperty('AUDIO_RETENTION_DAYS') || 7) * 86400000).toISOString();
+      deleteAfter = new Date(Date.now() + Number(props.getProperty('AUDIO_RETENTION_DAYS') || 7) * 86400000);
     }
   }
   const existing = findRow_(sheet, s.id);
@@ -77,7 +78,7 @@ function saveSession_(s) {
     deleteAfter = sheet.getRange(existing, 16).getValue();
   }
   const priorAi = existing ? sheet.getRange(existing,17,1,2).getValues()[0] : ['',''];
-  const values = [s.id,s.createdAt||new Date().toISOString(),s.groupId||'',s.attempt||1,s.title||'',s.context||'',s.audience||'',s.duration||0,s.transcript||'',s.timestampedTranscript||'',JSON.stringify(s.segments||[]),s.reflection||'',s.tags||'',JSON.stringify(s.metrics||{}),audioId,deleteAfter,s.aiStatus||priorAi[0]||'',s.aiReview?JSON.stringify(s.aiReview):priorAi[1]||'',new Date().toISOString()];
+  const values = [s.id,toDate_(s.createdAt)||new Date(),s.groupId||'',s.attempt||1,s.title||'',s.context||'',s.audience||'',s.duration||0,s.transcript||'',s.timestampedTranscript||'',JSON.stringify(s.segments||[]),s.reflection||'',s.tags||'',JSON.stringify(s.metrics||{}),audioId,toDate_(deleteAfter)||'',s.aiStatus||priorAi[0]||'',s.aiReview?JSON.stringify(s.aiReview):priorAi[1]||'',new Date()];
   if (existing) sheet.getRange(existing,1,1,values.length).setValues([values]); else sheet.appendRow(values);
   return {ok:true,id:s.id,audioDeleteAfter:deleteAfter};
 }
@@ -94,7 +95,7 @@ function listSessions_() {
 
 function analyzeJob_(body) {
   const jobs = sheet_(APP.jobs), jobId = body.jobId || Utilities.getUuid();
-  jobs.appendRow([jobId,new Date().toISOString(),'PROCESSING','','']);
+  jobs.appendRow([jobId,new Date(),'PROCESSING','','']);
   if (body.sessionId) updateSessionStatus_(body.sessionId,'PROCESSING','');
   try {
     const result = callGemini_(body.transcript, body.metrics || {}, body.rubric || {});
@@ -142,8 +143,8 @@ function getJob_(id) {
   return {ok:true,jobId:r[0],status:r[2],result:parse_(r[3],r[3]||null),error:r[4]||''};
 }
 function updateJob_(id,status,result,error) { const s=sheet_(APP.jobs),r=findRow_(s,id);if(r)s.getRange(r,3,1,3).setValues([[status,result,error]]); }
-function updateSessionReview_(id,result) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([['DONE',JSON.stringify(result),new Date().toISOString()]]); }
-function updateSessionStatus_(id,status,message) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([[status,message||s.getRange(r,18).getValue(),new Date().toISOString()]]); }
+function updateSessionReview_(id,result) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([['DONE',JSON.stringify(result),new Date()]]); }
+function updateSessionStatus_(id,status,message) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([[status,message||s.getRange(r,18).getValue(),new Date()]]); }
 
 function setConfig_(body) {
   const days = Math.max(1,Math.min(30,Number(body.retentionDays || 7)));
@@ -157,6 +158,18 @@ function cleanupExpiredAudio() {
   rows.forEach((r,i)=>{const id=r[14],expiry=r[15]&&new Date(r[15]).getTime();if(id&&expiry&&expiry<=now){try{if(typeof Drive!=='undefined'&&Drive.Files)Drive.Files.remove(id);else DriveApp.getFileById(id).setTrashed(true)}catch(e){}sheet.getRange(i+2,15,1,2).setValues([['','DELETED']])}});
 }
 
+function repairTimestamps() {
+  const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));
+  ss.setSpreadsheetTimeZone('Asia/Kolkata');
+  const sessions=ss.getSheetByName(APP.sessions);
+  [2,16,19].forEach(col=>convertDateColumn_(sessions,col));
+  convertDateColumn_(ss.getSheetByName(APP.jobs),2);
+  if(sessions&&sessions.getLastRow()>1){[2,16,19].forEach(col=>sessions.getRange(2,col,sessions.getLastRow()-1,1).setNumberFormat('dd/MM/yyyy HH:mm:ss'))}
+  const jobs=ss.getSheetByName(APP.jobs);if(jobs&&jobs.getLastRow()>1)jobs.getRange(2,2,jobs.getLastRow()-1,1).setNumberFormat('dd/MM/yyyy HH:mm:ss');
+  console.log('Existing timestamps converted to India time display.');
+}
+function convertDateColumn_(sheet,col){if(!sheet||sheet.getLastRow()<2)return;const range=sheet.getRange(2,col,sheet.getLastRow()-1,1),values=range.getValues().map(r=>{const d=toDate_(r[0]);return[d||r[0]]});range.setValues(values)}
+
 function health_() {
   const p=PropertiesService.getScriptProperties();
   const key=p.getProperty('GEMINI_API_KEY');
@@ -169,6 +182,7 @@ function ensureSheet_(ss,name,headers){let s=ss.getSheetByName(name);if(!s)s=ss.
 function findRow_(sheet,id){if(!id||sheet.getLastRow()<2)return 0;const f=sheet.getRange(2,1,sheet.getLastRow()-1,1).createTextFinder(String(id)).matchEntireCell(true).findNext();return f?f.getRow():0}
 function parse_(v,fallback){try{return typeof v==='string'?JSON.parse(v):v}catch(e){return fallback}}
 function dateText_(v){return v instanceof Date?v.toISOString():String(v||'')}
+function toDate_(v){if(v instanceof Date&&!isNaN(v.getTime()))return v;if(!v)return null;const d=new Date(v);return isNaN(d.getTime())?null:d}
 function safe_(s){return String(s||'recording').replace(/[^a-z0-9_-]+/gi,'-').slice(0,80)}
 function json_(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON)}
 function jsonp_(o,cb){const body=cb?String(cb).replace(/[^a-zA-Z0-9_.$]/g,'')+'('+JSON.stringify(o)+');':JSON.stringify(o);return ContentService.createTextOutput(body).setMimeType(cb?ContentService.MimeType.JAVASCRIPT:ContentService.MimeType.JSON)}
