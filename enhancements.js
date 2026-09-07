@@ -44,10 +44,10 @@
   async function saveEnhanced(repeat){
     if(!$('title').value.trim())return toast('Add a title.');if(!blob&&!$('transcript').value.trim())return toast('Record audio or add a transcript.');
     enhanceReview();const keep=$('retainAudio').checked,group=$('groupId').value||crypto.randomUUID(),attempt=Number($('attemptNo').value)||1;
-    const row={id:crypto.randomUUID(),groupId:group,attempt:attempt,createdAt:new Date().toISOString(),title:$('title').value.trim(),context:$('context').value,audience:$('audience').value.trim(),duration:duration,transcript:$('transcript').value.trim(),timestampedTranscript:$('timestampedTranscript').value.trim(),segments:segments,reflection:$('reflection').value.trim(),tags:$('tags').value.trim(),metrics:lastMetrics,audio:keep?blob:null,audioType:keep&&blob?blob.type:''};
+    const row={id:$('sessionId').value||crypto.randomUUID(),groupId:group,attempt:attempt,createdAt:new Date().toISOString(),title:$('title').value.trim(),context:$('context').value,audience:$('audience').value.trim(),duration:duration,transcript:$('transcript').value.trim(),timestampedTranscript:$('timestampedTranscript').value.trim(),segments:segments,reflection:$('reflection').value.trim(),tags:$('tags').value.trim(),metrics:lastMetrics,audio:keep?blob:null,audioType:keep&&blob?blob.type:''};
     await put(row);toast('Sample saved on this device');await renderEnhanced();
     const defaults={title:row.title,context:row.context,audience:row.audience};reset();segments=[];$('reviewPanel').hidden=true;$('repeatBtn').hidden=true;$('redoTranscriptBtn').hidden=true;parseSegments();
-    if(repeat){$('title').value=defaults.title;$('context').value=defaults.context;$('audience').value=defaults.audience;$('groupId').value=group;$('attemptNo').value=attempt+1;$('attemptBadge').textContent='Attempt '+(attempt+1);await compareGroup(group)}else{$('groupId').value=crypto.randomUUID();$('attemptNo').value=1;$('attemptBadge').textContent='Attempt 1'}
+    $('sessionId').value=crypto.randomUUID();if(repeat){$('title').value=defaults.title;$('context').value=defaults.context;$('audience').value=defaults.audience;$('groupId').value=group;$('attemptNo').value=attempt+1;$('attemptBadge').textContent='Attempt '+(attempt+1);await compareGroup(group)}else{$('groupId').value=crypto.randomUUID();$('attemptNo').value=1;$('attemptBadge').textContent='Attempt 1'}
   }
   async function compareGroup(group){const rows=(await all()).filter(r=>r.groupId===group).sort((a,b)=>a.attempt-b.attempt),p=$('comparePanel');if(rows.length<2){p.hidden=true;return}const a=rows[rows.length-2],b=rows[rows.length-1];p.hidden=false;$('compareContent').innerHTML=compareTable(a,b)}
   function change(a,b,lower){const d=(b||0)-(a||0),good=lower?d<0:d>0;return '<span class="'+(d===0?'same':good?'good':'bad')+'">'+(d>0?'+':'')+(Math.round(d*10)/10)+'</span>'}
@@ -72,7 +72,7 @@
   async function fullBackup(){const rows=await all(),packed=[];for(const r of rows)packed.push(Object.assign({},r,{audio:r.audio?await blobToData(r.audio):null}));download(new Blob([JSON.stringify({app:'Fluency OS',version:'1.5.0',exportedAt:new Date().toISOString(),samples:packed},null,2)],{type:'application/json'}),'fluency-os-full-backup.json');toast('Full backup downloaded')}
   $('exportBtn').onclick=fullBackup;$('fullBackupBtn').onclick=fullBackup;$('restoreBtn').onclick=()=>$('restoreInput').click();
   $('restoreInput').onchange=async function(e){const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.samples))throw Error('Invalid backup');for(const r of d.samples)await put(Object.assign({},r,{audio:typeof r.audio==='string'?dataToBlob(r.audio):null}));toast(d.samples.length+' sessions restored');await renderEnhanced()}catch(err){toast('Restore failed: '+err.message)}e.target.value=''};
-  $('groupId').value=crypto.randomUUID();$('attemptNo').value=1;enhanceReview();
+  $('sessionId').value=crypto.randomUUID();$('groupId').value=crypto.randomUUID();$('attemptNo').value=1;enhanceReview();
   document.addEventListener('DOMContentLoaded',function(){
     $('saveBtn').onclick=function(){saveEnhanced(false)};
     $('repeatBtn').onclick=function(){saveEnhanced(true)};

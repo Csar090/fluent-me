@@ -76,7 +76,8 @@ function saveSession_(s) {
     audioId = sheet.getRange(existing, 15).getValue();
     deleteAfter = sheet.getRange(existing, 16).getValue();
   }
-  const values = [s.id,s.createdAt||new Date().toISOString(),s.groupId||'',s.attempt||1,s.title||'',s.context||'',s.audience||'',s.duration||0,s.transcript||'',s.timestampedTranscript||'',JSON.stringify(s.segments||[]),s.reflection||'',s.tags||'',JSON.stringify(s.metrics||{}),audioId,deleteAfter,s.aiStatus||'',s.aiReview||'',new Date().toISOString()];
+  const priorAi = existing ? sheet.getRange(existing,17,1,2).getValues()[0] : ['',''];
+  const values = [s.id,s.createdAt||new Date().toISOString(),s.groupId||'',s.attempt||1,s.title||'',s.context||'',s.audience||'',s.duration||0,s.transcript||'',s.timestampedTranscript||'',JSON.stringify(s.segments||[]),s.reflection||'',s.tags||'',JSON.stringify(s.metrics||{}),audioId,deleteAfter,s.aiStatus||priorAi[0]||'',s.aiReview?JSON.stringify(s.aiReview):priorAi[1]||'',new Date().toISOString()];
   if (existing) sheet.getRange(existing,1,1,values.length).setValues([values]); else sheet.appendRow(values);
   return {ok:true,id:s.id,audioDeleteAfter:deleteAfter};
 }
@@ -94,6 +95,7 @@ function listSessions_() {
 function analyzeJob_(body) {
   const jobs = sheet_(APP.jobs), jobId = body.jobId || Utilities.getUuid();
   jobs.appendRow([jobId,new Date().toISOString(),'PROCESSING','','']);
+  if (body.sessionId) updateSessionStatus_(body.sessionId,'PROCESSING','');
   try {
     const result = callGemini_(body.transcript, body.metrics || {}, body.rubric || {});
     updateJob_(jobId,'DONE',JSON.stringify(result),'');
@@ -101,6 +103,7 @@ function analyzeJob_(body) {
     return {ok:true,jobId:jobId};
   } catch (err) {
     updateJob_(jobId,'ERROR','',String(err && err.message || err));
+    if (body.sessionId) updateSessionStatus_(body.sessionId,'ERROR',String(err && err.message || err));
     return {ok:false,jobId:jobId,error:String(err && err.message || err)};
   }
 }
@@ -140,6 +143,7 @@ function getJob_(id) {
 }
 function updateJob_(id,status,result,error) { const s=sheet_(APP.jobs),r=findRow_(s,id);if(r)s.getRange(r,3,1,3).setValues([[status,result,error]]); }
 function updateSessionReview_(id,result) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([['DONE',JSON.stringify(result),new Date().toISOString()]]); }
+function updateSessionStatus_(id,status,message) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([[status,message||s.getRange(r,18).getValue(),new Date().toISOString()]]); }
 
 function setConfig_(body) {
   const days = Math.max(1,Math.min(30,Number(body.retentionDays || 7)));
