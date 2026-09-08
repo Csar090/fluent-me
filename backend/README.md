@@ -1,15 +1,26 @@
-# Fluency OS Google backend
+# Fluency OS Google backend — V2
 
-1. Create a standalone Google Apps Script project.
-2. Replace `Code.gs` with this folder's `Code.gs`.
-3. In Project Settings, enable **Show appsscript.json**, then replace it with this folder's manifest.
-4. Run `setup` once and approve access. The existing Sheet and Drive folder are preserved.
-5. In Project Settings → Script properties, add `GEMINI_API_KEY`. Never place the key in GitHub or the dashboard.
-6. Deploy → New deployment → Web app. Execute as **Me** and allow **Anyone**.
-7. In Script properties add `GOOGLE_CLIENT_ID` and `APPROVED_EMAILS` (comma-separated Gmail addresses).
-8. Put the public `/exec` URL and OAuth Web Client ID into the two deployment constants at the top of `cloud.js`.
-9. Future Apps Script updates must edit the existing deployment and select **New version**. Never create a second deployment; the `/exec` URL then stays permanent.
+## One-time setup
 
-The legacy access token remains available only as a recovery path. Normal users sign in with Google and never enter a URL, Sheet ID, folder ID, or token.
+1. Replace the Apps Script project's `Code.gs` with this repository's `backend/Code.gs`.
+2. Keep the existing Script properties, Sheet and Drive folder. Run `setup` once; it is migration-safe and adds the `Users` sheet.
+3. In Google Cloud Console create a **Web application OAuth client** for Google Identity Services.
+4. Add `https://csar090.github.io` as an authorised JavaScript origin.
+5. In Apps Script → Project Settings → Script properties, add:
+   - `GOOGLE_CLIENT_ID`: the OAuth web client ID
+   - `ALLOWED_EMAILS`: approved Gmail address(es), comma-separated
+   - `GEMINI_API_KEY`: existing Gemini key
+6. Deploy the backend as a web app: execute as **Me**, access **Anyone**.
+7. Put the permanent `/exec` URL into `config.js` once.
 
-Run `setup` again only when repairing the database or cleanup trigger. It reuses existing Sheet and Drive folder IDs.
+## Keeping the URL permanent
+
+For every later backend update use **Deploy → Manage deployments → Edit → New version → Deploy**.
+
+Do not create another deployment. Editing the existing deployment updates the backend while preserving the same URL and deployment ID.
+
+## Authentication flow
+
+The browser sends the short-lived Google ID credential by POST. The backend verifies its audience, verified email and the `ALLOWED_EMAILS` allowlist, then issues a temporary Fluency OS session token. Gmail credentials and Gemini keys are never stored in the repository.
+
+The previous private access token remains supported only as a migration fallback. Existing recordings and the current database are preserved.
