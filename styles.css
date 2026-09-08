@@ -9,3 +9,27 @@ table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:8px;borde
 dialog{width:min(700px,calc(100% - 24px));max-height:88vh;overflow:auto;border:0;border-radius:16px;padding:20px;color:var(--ink)}dialog::backdrop{background:#17233c99}.dialog-close{float:right}pre,.detail-text{white-space:pre-wrap;overflow-wrap:anywhere;background:#f6f7f8;padding:11px;border-radius:9px}
 @media(max-width:560px){.review-grid{grid-template-columns:1fr 1fr}.segment{grid-template-columns:72px 1fr}}
 fieldset{border:1px solid var(--line);border-radius:12px;margin:14px 0;padding:10px 12px}legend{color:var(--muted);font-size:12px;font-weight:700}.ai-result{border:1px solid #bfd8cb;background:#f3fbf6;border-radius:12px;padding:13px;margin-top:10px}.ai-result h3,.ai-result h4{margin:8px 0}.cloud-ok{color:#087a45}.cloud-warn{color:#a52c1a}
+
+
+/* V2 — Crisp, Sharp, Impactful coaching and Google account linking */
+.north-star{display:block;margin-top:.2rem;font-size:.68rem;font-weight:800;letter-spacing:.14em;color:#9fd4ff}
+.header-actions{display:flex;align-items:center;gap:.55rem}
+.account-badge{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:.38rem .68rem;font-size:.72rem}
+.focus-card{border-left:5px solid #2d7ab7;background:linear-gradient(135deg,#f4f9ff,#fff)}
+.focus-card h2{margin:.35rem 0 .25rem;color:#174d78;letter-spacing:.04em}
+.focus-card>p{margin:.2rem 0 1rem;font-size:1.03rem}
+.focus-meta{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+.focus-meta span{display:flex;flex-direction:column;background:#fff;border:1px solid #dce8f2;border-radius:12px;padding:.7rem}
+.focus-meta b{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:#647589}
+.focus-meta em{font-style:normal;margin-top:.2rem;color:#17233c}
+.google-signin{min-height:44px;margin:.7rem 0}
+.signed-in-panel{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:.75rem;border:1px solid #b8dec5;border-radius:12px;background:#f1fbf4;margin:.6rem 0}
+.advanced-connection{margin:.8rem 0;border:1px solid #dce3ea;border-radius:10px;padding:.65rem}
+.advanced-connection summary{cursor:pointer;font-weight:700;color:#536274}
+.ai-result h4{margin-bottom:.35rem}
+@media(max-width:600px){
+  header{align-items:flex-start}
+  .header-actions{flex-direction:column;align-items:flex-end}
+  .account-badge{max-width:130px}
+  .focus-meta{grid-template-columns:1fr}
+}
