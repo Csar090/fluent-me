@@ -1,6 +1,7 @@
 const APP = {
   sessions: 'Sessions',
   jobs: 'AI_Jobs',
+  users: 'Users',
   database: 'Fluency OS Database',
   audioFolder: 'Fluency OS - Temporary Audio',
   defaultModel: 'gemini-3.5-flash-lite',
@@ -14,12 +15,14 @@ function setup() {
   let folder = props.getProperty('FOLDER_ID') ? DriveApp.getFolderById(props.getProperty('FOLDER_ID')) : DriveApp.createFolder(APP.audioFolder);
   ensureSheet_(ss, APP.sessions, APP.headers);
   ensureSheet_(ss, APP.jobs, ['jobId','createdAt','status','result','error']);
+  ensureSheet_(ss, APP.users, ['email','status','createdAt','lastSeen','authVersion']);
   props.setProperties({
     SHEET_ID: ss.getId(),
     FOLDER_ID: folder.getId(),
     ACCESS_TOKEN: props.getProperty('ACCESS_TOKEN') || Utilities.getUuid() + Utilities.getUuid(),
     AUDIO_RETENTION_DAYS: props.getProperty('AUDIO_RETENTION_DAYS') || '7',
-    GEMINI_MODEL: props.getProperty('GEMINI_MODEL') || APP.defaultModel
+    GEMINI_MODEL: props.getProperty('GEMINI_MODEL') || APP.defaultModel,
+    ALLOWED_EMAILS: props.getProperty('ALLOWED_EMAILS') || Session.getEffectiveUser().getEmail()
   }, false);
   ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'cleanupExpiredAudio').forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('cleanupExpiredAudio').timeBased().everyDays(1).atHour(2).create();
@@ -35,8 +38,10 @@ function setup() {
 
 function doGet(e) {
   const p = e && e.parameter || {};
-  if (!authorized_(p.token)) return jsonp_({ok:false,error:'UNAUTHORIZED'}, p.callback);
   try {
+    if (p.action === 'bootstrap') return jsonp_(bootstrap_(), p.callback);
+    if (p.action === 'signinResult') return jsonp_(signinResult_(p.nonce), p.callback);
+    if (!authorizedRequest_(p)) return jsonp_({ok:false,error:'UNAUTHORIZED'}, p.callback);
     if (p.action === 'health') return jsonp_(health_(), p.callback);
     if (p.action === 'list') return jsonp_({ok:true,sessions:listSessions_()}, p.callback);
     if (p.action === 'job') return jsonp_(getJob_(p.jobId), p.callback);
@@ -49,7 +54,8 @@ function doGet(e) {
 function doPost(e) {
   try {
     const body = JSON.parse(e.postData && e.postData.contents || '{}');
-    if (!authorized_(body.token)) return json_({ok:false,error:'UNAUTHORIZED'});
+    if (body.action === 'signin') return json_(signin_(body));
+    if (!authorizedRequest_(body)) return json_({ok:false,error:'UNAUTHORIZED'});
     if (body.action === 'save') return json_(saveSession_(body.session));
     if (body.action === 'analyze') return json_(analyzeJob_(body));
     if (body.action === 'config') return json_(setConfig_(body));
@@ -113,27 +119,49 @@ function callGemini_(transcript, metrics, rubric) {
   const props = PropertiesService.getScriptProperties(), key = props.getProperty('GEMINI_API_KEY');
   if (!key) throw new Error('GEMINI_API_KEY is not configured in Script properties.');
   const model = rubric.model || props.getProperty('GEMINI_MODEL') || APP.defaultModel;
+  const mode = String(rubric.mode || 'Professional Update');
+  const words = Number(metrics.words || String(transcript).trim().split(/\s+/).filter(Boolean).length);
   const system = [
-    'You are the Fluency OS communication coach. Coach, do not judge. Preserve the speaker’s personality and intent.',
-    'Evaluate only from the supplied transcript and objective metrics. Do not invent vocal qualities that text cannot prove.',
-    'Return valid JSON only with this schema:',
-    '{"summary":"string","scores":{"structure":0,"clarity":0,"articulation":0,"concision":0,"pacing":0,"fillerControl":0,"executivePresence":0,"authenticity":0},"strengths":["string"],"primaryLever":"string","evidence":["string"],"tighterVersion":"string","practiceChallenge":"string"}',
-    'Scores are integers from 0 to 100. Distinguish observed evidence from inference.',
+    'You are the Fluency OS communication coach. The product north star is CRISP, SHARP AND IMPACTFUL communication.',
+    'CRISP means point-first, clear, hierarchical and easy to follow.',
+    'SHARP means economical, precise, controlled and free of unnecessary qualification, repetition and side branches.',
+    'IMPACTFUL means the listener retains a clear takeaway, implication, decision, recommendation or action.',
+    'The coaching loop is: one recording -> one primary insight -> one better version -> one measurable drill.',
+    'Coach observable communication behaviour; never judge personality or diagnose psychological traits.',
+    'Communication mode: '+mode+'. Adapt strictness to this mode. Reflection may explore; executive briefing must be conclusion-first and economical.',
+    'Use transcript and objective metrics only. Do not claim vocal tone, pitch, confidence or pause quality unless audio evidence was supplied.',
+    'Do not reward sophisticated vocabulary when clarity is weak. Do not punish necessary technical detail when it serves the listener.',
+    'Preserve factual meaning in rewrites and never invent facts.',
+    words < 25 ? 'This is a low-evidence sample. Keep measurable metrics, set deep scores to null where evidence is insufficient, and explain insufficiency.' : 'Evidence is sufficient for a concise transcript-based coaching review.',
+    'Return valid JSON only using this schema:',
+    '{"analysisStatus":"COMPLETE or INSUFFICIENT_EVIDENCE","modeSelected":"string","modeInferred":"string or null","architecture":{"current":"string","better":"string"},"summary":"string","northStar":{"crisp":"band","sharp":"band","impactful":"band"},"scores":{"structure":0,"clarity":0,"articulation":null,"concision":0,"pacing":0,"fillerControl":0,"executivePresence":0,"authenticity":0,"compression":0,"decisiveness":0,"impact":0},"whatWorked":["maximum two observable positives"],"primaryLeak":"single concise label","secondaryObservation":"string or null","evidence":["maximum two concise excerpts with explanation"],"compression":{"assessment":"string","opportunityBand":"string","originalWords":0,"rewrittenWords":0,"rewrite":"string"},"executiveVersion":"string","punchyVersion":"string or null","drill":{"id":"short-id","name":"short label","instruction":"measurable instruction","successMeasure":"string"}}',
+    'All numeric scores are integers 0-100 or null when evidence is insufficient. Compression opportunity should be a useful range, not false precision.',
+    'Presence reflects command, economy, clarity, conviction, composure and professional authority, but mark its transcript-only limitation in the summary.',
+    'Identify no more than one primary leak. If communication is already strong, name a refinement rather than manufacturing a defect.',
     'Enabled criteria: ' + JSON.stringify(rubric.criteria || {}),
     'Custom instruction: ' + String(rubric.custom || 'None')
   ].join('\n');
-  const payload = {contents:[{role:'user',parts:[{text:system+'\n\nObjective metrics:\n'+JSON.stringify(metrics)+'\n\nTranscript:\n'+transcript}]}],generationConfig:{temperature:0.25,responseMimeType:'application/json'}};
+  const payload = {contents:[{role:'user',parts:[{text:system+'\n\nObjective metrics:\n'+JSON.stringify(metrics)+'\n\nTranscript:\n'+transcript}]}],generationConfig:{temperature:0.2,responseMimeType:'application/json'}};
   const request = {method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true};
-  let response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent?key='+encodeURIComponent(key),request);
+  let usedModel=model;
+  let response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(usedModel)+':generateContent?key='+encodeURIComponent(key),request);
   if (response.getResponseCode() === 404) {
     const available = listGenerateModels_(key);
     const fallback = available.indexOf(APP.defaultModel) >= 0 ? APP.defaultModel : available[0];
-    if (fallback && fallback !== model) response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(fallback)+':generateContent?key='+encodeURIComponent(key),request);
+    if (fallback && fallback !== usedModel) {
+      usedModel=fallback;
+      response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(usedModel)+':generateContent?key='+encodeURIComponent(key),request);
+    }
   }
   if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) throw new Error('Gemini HTTP '+response.getResponseCode()+': '+response.getContentText().slice(0,500));
   const data = JSON.parse(response.getContentText()), text = data.candidates && data.candidates[0] && data.candidates[0].content.parts[0].text;
   if (!text) throw new Error('Gemini returned no review.');
-  return parse_(String(text).replace(/^\`\`\`json\s*|\s*\`\`\`$/g,''),{summary:text});
+  const result=parse_(String(text).replace(/^\`\`\`json\s*|\s*\`\`\`$/g,''),{summary:text});
+  result.analysisVersion=String(rubric.analysisVersion||'2.0');
+  result.rubricVersion=String(rubric.rubricVersion||'crisp-sharp-impactful-v1');
+  result.modelUsed=usedModel;
+  result.analyzedAt=new Date().toISOString();
+  return result;
 }
 
 function getJob_(id) {
@@ -176,6 +204,59 @@ function health_() {
   return {ok:true,database:true,drive:true,geminiConfigured:Boolean(key),retentionDays:Number(p.getProperty('AUDIO_RETENTION_DAYS')||7),model:p.getProperty('GEMINI_MODEL')||APP.defaultModel,availableModels:key?listGenerateModels_(key):[]};
 }
 function listGenerateModels_(key){try{const r=UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key),{muteHttpExceptions:true});if(r.getResponseCode()!==200)return[];return(JSON.parse(r.getContentText()).models||[]).filter(m=>(m.supportedGenerationMethods||[]).indexOf('generateContent')>=0).map(m=>String(m.name||'').replace(/^models\//,''))}catch(e){return[]}}
+function bootstrap_() {
+  const p=PropertiesService.getScriptProperties();
+  return {ok:true,authVersion:'google-v1',googleClientId:p.getProperty('GOOGLE_CLIENT_ID')||'',northStar:'Crisp • Sharp • Impactful'};
+}
+function signin_(body) {
+  const cache=CacheService.getScriptCache(),nonce=String(body.nonce||'');
+  if (!nonce || !/^[a-zA-Z0-9-]{16,80}$/.test(nonce)) return {ok:false,error:'INVALID_NONCE'};
+  try {
+    const user=verifyGoogleCredential_(body.credential);
+    const sessionToken=Utilities.getUuid()+Utilities.getUuid(),expires=21600;
+    cache.put('fluency-session-'+sessionToken,JSON.stringify({email:user.email}),expires);
+    const result={ok:true,status:'DONE',email:user.email,sessionToken:sessionToken,expiresIn:expires};
+    cache.put('fluency-signin-'+nonce,JSON.stringify(result),120);
+    recordUser_(user.email);
+    return {ok:true,status:'PROCESSING'};
+  } catch(err) {
+    cache.put('fluency-signin-'+nonce,JSON.stringify({ok:false,status:'ERROR',error:String(err&&err.message||err)}),120);
+    return {ok:false,error:String(err&&err.message||err)};
+  }
+}
+function signinResult_(nonce) {
+  const raw=CacheService.getScriptCache().get('fluency-signin-'+String(nonce||''));
+  return raw?parse_(raw,{ok:false,status:'ERROR',error:'Invalid sign-in response'}):{ok:true,status:'PENDING'};
+}
+function verifyGoogleCredential_(credential) {
+  if(!credential)throw new Error('Google credential is missing.');
+  const p=PropertiesService.getScriptProperties(),clientId=p.getProperty('GOOGLE_CLIENT_ID');
+  if(!clientId)throw new Error('GOOGLE_CLIENT_ID is not configured.');
+  const response=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(credential),{muteHttpExceptions:true});
+  if(response.getResponseCode()!==200)throw new Error('Google could not verify this sign-in.');
+  const data=JSON.parse(response.getContentText());
+  if(data.aud!==clientId)throw new Error('Google sign-in was issued for another application.');
+  if(String(data.email_verified)!=='true')throw new Error('Google email is not verified.');
+  const email=String(data.email||'').toLowerCase(),allowed=String(p.getProperty('ALLOWED_EMAILS')||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
+  if(!email||allowed.indexOf(email)<0)throw new Error('This Gmail account is not approved for Fluency OS.');
+  return {email:email};
+}
+function authorizedRequest_(request) {
+  if(request&&request.sessionToken){
+    const raw=CacheService.getScriptCache().get('fluency-session-'+String(request.sessionToken));
+    if(raw)return true;
+  }
+  return authorized_(request&&request.token);
+}
+function recordUser_(email) {
+  const s=sheet_(APP.users),last=s.getLastRow(),now=new Date();
+  if(last>1){
+    const found=s.getRange(2,1,last-1,1).createTextFinder(email).matchEntireCell(true).findNext();
+    if(found){s.getRange(found.getRow(),2,1,4).setValues([['ACTIVE',s.getRange(found.getRow(),3).getValue()||now,now,'google-v1']]);return;}
+  }
+  s.appendRow([email,'ACTIVE',now,now,'google-v1']);
+}
+
 function authorized_(token){const expected=PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');return Boolean(expected&&token&&Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token)).join(',')===Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(expected)).join(','))}
 function sheet_(name){const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));return ss.getSheetByName(name)}
 function ensureSheet_(ss,name,headers){let s=ss.getSheetByName(name);if(!s)s=ss.insertSheet(name);if(s.getLastRow()===0)s.appendRow(headers);return s}
