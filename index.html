@@ -10,8 +10,8 @@
 </head>
 <body>
 <header>
-  <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1></div>
-  <button id="exportBtn">Backup</button>
+  <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1><span class="north-star">CRISP • SHARP • IMPACTFUL</span></div>
+  <div class="header-actions"><span id="accountBadge" class="account-badge">Local mode</span><button id="exportBtn">Backup</button></div>
 </header>
 <nav>
   <button class="active" data-tab="capture">Capture</button>
@@ -21,12 +21,18 @@
 </nav>
 <main>
   <section id="capture" class="tab active">
+    <article id="currentFocusCard" class="card focus-card">
+      <span class="eyebrow">TODAY / CURRENT COACHING FOCUS</span>
+      <h2 id="currentFocusTitle">HEADLINE FIRST</h2>
+      <p id="currentFocusText">State the central point early, then support it with no more than three relevant points.</p>
+      <div class="focus-meta"><span><b>Latest leak</b><em id="latestLeak">Waiting for your next reviewed recording</em></span><span><b>North star</b><em>Crisp • Sharp • Impactful</em></span></div>
+    </article>
     <article class="card hero">
       <span class="eyebrow">RECORD → REVIEW → PRACTISE → COMPARE</span>
       <h2>Record a communication sample</h2>
       <label>Title<input id="title" placeholder="Quarter-end meeting reflection"></label>
       <div class="grid">
-        <label>Context<select id="context"><option>Work meeting</option><option>Presentation</option><option>Conversation</option><option>Interview</option><option>Storytelling</option><option>Self-practice</option></select></label>
+        <label>Communication mode<select id="context"><option>Professional Update</option><option>Meeting Contribution</option><option>Executive Briefing</option><option>Explanation / Teaching</option><option>Persuasion / Recommendation</option><option>Conversation</option><option>Reflection / Thinking Aloud</option></select></label>
         <label>Audience<input id="audience" placeholder="CFO and project team"></label>
       </div>
       <input id="sessionId" type="hidden"><input id="groupId" type="hidden"><input id="attemptNo" type="hidden" value="1">
@@ -43,11 +49,11 @@
       <textarea id="timestampedTranscript" hidden></textarea>
       <div id="metrics" class="metrics"></div>
       <div id="reviewPanel" class="review-panel" hidden>
-        <h3>Session review</h3>
+        <h3>Crisp • Sharp • Impactful review</h3>
         <div id="reviewSnapshot" class="review-grid"></div>
         <div class="coach strength"><b>What worked</b><span id="coachStrength"></span></div>
-        <div class="coach focus"><b>One lever</b><span id="coachFocus"></span></div>
-        <div class="coach challenge"><b>Next challenge</b><span id="coachChallenge"></span></div>
+        <div class="coach focus"><b>Primary communication leak</b><span id="coachFocus"></span></div>
+        <div class="coach challenge"><b>One drill</b><span id="coachChallenge"></span></div>
         <div class="button-row"><button id="aiReviewBtn" class="primary">Review with Gemini AI</button><button id="copyCoachBtn">Copy review prompt</button></div>
         <div id="aiStatus" class="note"></div><div id="aiResult" class="ai-result" hidden></div>
       </div>
@@ -65,7 +71,7 @@
   <section id="library" class="tab">
     <article class="card">
       <h2>Saved samples</h2>
-      <div class="grid"><label>Search<input id="librarySearch" placeholder="Title, context, audience or tag"></label><label>Context<select id="libraryContext"><option value="">All contexts</option><option>Work meeting</option><option>Presentation</option><option>Conversation</option><option>Interview</option><option>Storytelling</option><option>Self-practice</option></select></label></div>
+      <div class="grid"><label>Search<input id="librarySearch" placeholder="Title, mode, audience or tag"></label><label>Mode<select id="libraryContext"><option value="">All modes</option><option>Professional Update</option><option>Meeting Contribution</option><option>Executive Briefing</option><option>Explanation / Teaching</option><option>Persuasion / Recommendation</option><option>Conversation</option><option>Reflection / Thinking Aloud</option></select></label></div>
       <div id="samples"></div>
     </article>
   </section>
@@ -85,15 +91,24 @@
       <label class="check"><input id="liveTranscript" type="checkbox" checked> Try live browser transcription</label>
       <label class="check"><input id="localTranscript" type="checkbox" checked> Use private on-device transcription and timestamps</label>
       <p class="note">The first on-device transcription downloads a small language model. Later sessions reuse the cache.</p>
-      <h3>Cloud database & AI</h3>
-      <label>Google backend URL<input id="cloudUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
-      <label>Private access token<input id="cloudToken" type="password" autocomplete="off" placeholder="Token returned by backend setup()"></label>
+      <h3>Google account & cloud</h3>
+      <p class="note">Sign in once with your approved Gmail account. Fluency OS will reconnect the linked database and Drive automatically on this device.</p>
+      <div id="googleSignInButton" class="google-signin"></div>
+      <div id="signedInPanel" class="signed-in-panel" hidden><b id="signedInEmail"></b><button id="signOutBtn" type="button">Sign out</button></div>
+      <details class="advanced-connection"><summary>Legacy connection fallback</summary>
+        <p class="note">Kept temporarily so the working deployment is not interrupted during Gmail migration.</p>
+        <label>Google backend URL<input id="cloudUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+        <label>Private access token<input id="cloudToken" type="password" autocomplete="off"></label>
+      </details>
       <div class="grid"><label>Audio retention<select id="retentionDays"><option value="7">7 days</option><option value="15">15 days</option></select></label><label>Gemini model<select id="geminiModel"><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (recommended)</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option></select></label></div>
-      <fieldset><legend>AI evaluation criteria</legend>
+      <fieldset><legend>Communication coaching criteria</legend>
         <label class="check"><input class="criterion" type="checkbox" value="structure" checked> Structure</label>
         <label class="check"><input class="criterion" type="checkbox" value="clarity" checked> Clarity</label>
         <label class="check"><input class="criterion" type="checkbox" value="articulation" checked> Articulation</label>
         <label class="check"><input class="criterion" type="checkbox" value="concision" checked> Concision</label>
+        <label class="check"><input class="criterion" type="checkbox" value="compression" checked> Compression</label>
+        <label class="check"><input class="criterion" type="checkbox" value="decisiveness" checked> Decisiveness</label>
+        <label class="check"><input class="criterion" type="checkbox" value="impact" checked> Impact</label>
         <label class="check"><input class="criterion" type="checkbox" value="executivePresence" checked> Executive presence</label>
         <label class="check"><input class="criterion" type="checkbox" value="authenticity" checked> Authenticity</label>
       </fieldset>
@@ -110,6 +125,8 @@
 </main>
 <dialog id="sessionDialog"><button id="closeDialog" class="dialog-close">Close</button><div id="sessionDetail"></div></dialog>
 <div id="toast"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
 <script src="enhancements.js"></script>
 <script src="cloud.js"></script>
