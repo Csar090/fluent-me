@@ -5,7 +5,7 @@ const APP = {
   database: 'Fluency OS Database',
   audioFolder: 'Fluency OS - Temporary Audio',
   defaultModel: 'gemini-3.5-flash-lite',
-  headers: ['id','createdAt','groupId','attempt','title','context','audience','duration','transcript','timestampedTranscript','segmentsJson','reflection','tags','metricsJson','audioFileId','audioDeleteAfter','aiStatus','aiReview','updatedAt']
+  headers: ['id','createdAt','groupId','attempt','title','context','audience','duration','transcript','timestampedTranscript','segmentsJson','reflection','tags','metricsJson','audioFileId','audioDeleteAfter','aiStatus','aiReview','updatedAt','source','sourceMessageId','sourceFileUniqueId','sourceDurationMs','transcriptionStatus','integrityStatus','timestampCoverageMs','timingVariancePct','timestampSchemaVersion','pauseMetricsJson','telegramUpdateId']
 };
 
 function setup() {
@@ -13,251 +13,37 @@ function setup() {
   let ss = props.getProperty('SHEET_ID') ? SpreadsheetApp.openById(props.getProperty('SHEET_ID')) : SpreadsheetApp.create(APP.database);
   ss.setSpreadsheetTimeZone('Asia/Kolkata');
   let folder = props.getProperty('FOLDER_ID') ? DriveApp.getFolderById(props.getProperty('FOLDER_ID')) : DriveApp.createFolder(APP.audioFolder);
-  ensureSheet_(ss, APP.sessions, APP.headers);
-  ensureSheet_(ss, APP.jobs, ['jobId','createdAt','status','result','error']);
-  ensureSheet_(ss, APP.users, ['email','status','createdAt','lastSeen','authVersion']);
-  props.setProperties({
-    SHEET_ID: ss.getId(),
-    FOLDER_ID: folder.getId(),
-    ACCESS_TOKEN: props.getProperty('ACCESS_TOKEN') || Utilities.getUuid() + Utilities.getUuid(),
-    AUDIO_RETENTION_DAYS: props.getProperty('AUDIO_RETENTION_DAYS') || '7',
-    GEMINI_MODEL: props.getProperty('GEMINI_MODEL') || APP.defaultModel,
-    ALLOWED_EMAILS: props.getProperty('ALLOWED_EMAILS') || Session.getEffectiveUser().getEmail()
-  }, false);
-  ScriptApp.getProjectTriggers().filter(t => t.getHandlerFunction() === 'cleanupExpiredAudio').forEach(t => ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('cleanupExpiredAudio').timeBased().everyDays(1).atHour(2).create();
-  const result = {
-    spreadsheetUrl: ss.getUrl(),
-    audioFolderUrl: folder.getUrl(),
-    accessToken: props.getProperty('ACCESS_TOKEN'),
-    next: 'Add GEMINI_API_KEY in Project Settings → Script properties, then deploy as a web app.'
-  };
-  console.log(JSON.stringify(result, null, 2));
-  return result;
+  ensureSheet_(ss, APP.sessions, APP.headers); ensureHeaders_(ss.getSheetByName(APP.sessions), APP.headers);
+  ensureSheet_(ss, APP.jobs, ['jobId','createdAt','status','result','error']); ensureSheet_(ss, APP.users, ['email','status','createdAt','lastSeen','authVersion']);
+  ensureSheet_(ss,'Telegram Inbox',['receivedAt','updateId','messageId','chatId','fileId','fileUniqueId','durationSec','mimeType','fileSize','sessionId','status','error']);
+  ensureSheet_(ss,'Word Timestamps',['sessionId','seq','word','startMs','endMs','confidence','speaker','pauseBeforeMs','pauseAfterMs','schemaVersion','createdAt']); ensureScoreHistoryColumns_(ss);
+  props.setProperties({SHEET_ID:ss.getId(),FOLDER_ID:folder.getId(),ACCESS_TOKEN:props.getProperty('ACCESS_TOKEN')||Utilities.getUuid()+Utilities.getUuid(),AUDIO_RETENTION_DAYS:props.getProperty('AUDIO_RETENTION_DAYS')||'7',GEMINI_MODEL:props.getProperty('GEMINI_MODEL')||APP.defaultModel,ALLOWED_EMAILS:props.getProperty('ALLOWED_EMAILS')||Session.getEffectiveUser().getEmail(),TELEGRAM_WEBHOOK_SECRET:props.getProperty('TELEGRAM_WEBHOOK_SECRET')||(Utilities.getUuid().replace(/-/g,'')+Utilities.getUuid().replace(/-/g,''))},false);
+  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='cleanupExpiredAudio').forEach(t=>ScriptApp.deleteTrigger(t)); ScriptApp.newTrigger('cleanupExpiredAudio').timeBased().everyDays(1).atHour(2).create();
+  return {spreadsheetUrl:ss.getUrl(),audioFolderUrl:folder.getUrl(),accessToken:props.getProperty('ACCESS_TOKEN'),next:'Add GEMINI_API_KEY in Project Settings → Script properties, then deploy as a web app.'};
 }
-
-function doGet(e) {
-  const p = e && e.parameter || {};
-  try {
-    if (p.action === 'bootstrap') return jsonp_(bootstrap_(), p.callback);
-    if (p.action === 'signinResult') return jsonp_(signinResult_(p.nonce), p.callback);
-    if (!authorizedRequest_(p)) return jsonp_({ok:false,error:'UNAUTHORIZED'}, p.callback);
-    if (p.action === 'health') return jsonp_(health_(), p.callback);
-    if (p.action === 'list') return jsonp_({ok:true,sessions:listSessions_()}, p.callback);
-    if (p.action === 'job') return jsonp_(getJob_(p.jobId), p.callback);
-    return jsonp_({ok:false,error:'UNKNOWN_ACTION'}, p.callback);
-  } catch (err) {
-    return jsonp_({ok:false,error:String(err && err.message || err)}, p.callback);
-  }
-}
-
-function doPost(e) {
-  try {
-    const body = JSON.parse(e.postData && e.postData.contents || '{}');
-    if (body.action === 'signin') return json_(signin_(body));
-    if (!authorizedRequest_(body)) return json_({ok:false,error:'UNAUTHORIZED'});
-    if (body.action === 'save') return json_(saveSession_(body.session));
-    if (body.action === 'analyze') return json_(analyzeJob_(body));
-    if (body.action === 'config') return json_(setConfig_(body));
-    return json_({ok:false,error:'UNKNOWN_ACTION'});
-  } catch (err) {
-    return json_({ok:false,error:String(err && err.message || err)});
-  }
-}
-
-function saveSession_(s) {
-  if (!s || !s.id || !s.transcript) throw new Error('Session id and transcript are required.');
-  const props = PropertiesService.getScriptProperties(), sheet = sheet_(APP.sessions);
-  let audioId = '', deleteAfter = '';
-  if (s.audioDataUrl) {
-    const match = String(s.audioDataUrl).match(/^data:([^;]+);base64,(.+)$/);
-    if (match) {
-      const bytes = Utilities.base64Decode(match[2]), ext = match[1].indexOf('mp4') >= 0 ? 'm4a' : 'webm';
-      const file = DriveApp.getFolderById(props.getProperty('FOLDER_ID')).createFile(Utilities.newBlob(bytes, match[1], safe_(s.title) + '-' + s.id + '.' + ext));
-      audioId = file.getId();
-      deleteAfter = new Date(Date.now() + Number(props.getProperty('AUDIO_RETENTION_DAYS') || 7) * 86400000);
-    }
-  }
-  const existing = findRow_(sheet, s.id);
-  if (existing && !audioId) {
-    audioId = sheet.getRange(existing, 15).getValue();
-    deleteAfter = sheet.getRange(existing, 16).getValue();
-  }
-  const priorAi = existing ? sheet.getRange(existing,17,1,2).getValues()[0] : ['',''];
-  const values = [s.id,toDate_(s.createdAt)||new Date(),s.groupId||'',s.attempt||1,s.title||'',s.context||'',s.audience||'',s.duration||0,s.transcript||'',s.timestampedTranscript||'',JSON.stringify(s.segments||[]),s.reflection||'',s.tags||'',JSON.stringify(s.metrics||{}),audioId,toDate_(deleteAfter)||'',s.aiStatus||priorAi[0]||'',s.aiReview?JSON.stringify(s.aiReview):priorAi[1]||'',new Date()];
-  if (existing) sheet.getRange(existing,1,1,values.length).setValues([values]); else sheet.appendRow(values);
-  return {ok:true,id:s.id,audioDeleteAfter:deleteAfter};
-}
-
-function listSessions_() {
-  const sheet = sheet_(APP.sessions), last = sheet.getLastRow();
-  if (last < 2) return [];
-  return sheet.getRange(2,1,last-1,APP.headers.length).getValues().map(r => ({
-    id:r[0],createdAt:dateText_(r[1]),groupId:r[2],attempt:r[3],title:r[4],context:r[5],audience:r[6],duration:r[7],
-    transcript:r[8],timestampedTranscript:r[9],segments:parse_(r[10],[]),reflection:r[11],tags:r[12],metrics:parse_(r[13],{}),
-    audioRetained:Boolean(r[14]),audioDeleteAfter:dateText_(r[15]),aiStatus:r[16],aiReview:parse_(r[17],r[17]||null),updatedAt:dateText_(r[18])
-  }));
-}
-
-function analyzeJob_(body) {
-  const jobs = sheet_(APP.jobs), jobId = body.jobId || Utilities.getUuid();
-  jobs.appendRow([jobId,new Date(),'PROCESSING','','']);
-  if (body.sessionId) updateSessionStatus_(body.sessionId,'PROCESSING','');
-  try {
-    const result = callGemini_(body.transcript, body.metrics || {}, body.rubric || {});
-    updateJob_(jobId,'DONE',JSON.stringify(result),'');
-    if (body.sessionId) updateSessionReview_(body.sessionId,result);
-    return {ok:true,jobId:jobId};
-  } catch (err) {
-    updateJob_(jobId,'ERROR','',String(err && err.message || err));
-    if (body.sessionId) updateSessionStatus_(body.sessionId,'ERROR',String(err && err.message || err));
-    return {ok:false,jobId:jobId,error:String(err && err.message || err)};
-  }
-}
-
-function callGemini_(transcript, metrics, rubric) {
-  const props = PropertiesService.getScriptProperties(), key = props.getProperty('GEMINI_API_KEY');
-  if (!key) throw new Error('GEMINI_API_KEY is not configured in Script properties.');
-  const model = rubric.model || props.getProperty('GEMINI_MODEL') || APP.defaultModel;
-  const mode = String(rubric.mode || 'Professional Update');
-  const words = Number(metrics.words || String(transcript).trim().split(/\s+/).filter(Boolean).length);
-  const system = [
-    'You are the Fluency OS communication coach. The product north star is CRISP, SHARP AND IMPACTFUL communication.',
-    'CRISP means point-first, clear, hierarchical and easy to follow.',
-    'SHARP means economical, precise, controlled and free of unnecessary qualification, repetition and side branches.',
-    'IMPACTFUL means the listener retains a clear takeaway, implication, decision, recommendation or action.',
-    'The coaching loop is: one recording -> one primary insight -> one better version -> one measurable drill.',
-    'Coach observable communication behaviour; never judge personality or diagnose psychological traits.',
-    'Communication mode: '+mode+'. Adapt strictness to this mode. Reflection may explore; executive briefing must be conclusion-first and economical.',
-    'Use transcript and objective metrics only. Do not claim vocal tone, pitch, confidence or pause quality unless audio evidence was supplied.',
-    'Do not reward sophisticated vocabulary when clarity is weak. Do not punish necessary technical detail when it serves the listener.',
-    'Preserve factual meaning in rewrites and never invent facts.',
-    words < 25 ? 'This is a low-evidence sample. Keep measurable metrics, set deep scores to null where evidence is insufficient, and explain insufficiency.' : 'Evidence is sufficient for a concise transcript-based coaching review.',
-    'Return valid JSON only using this schema:',
-    '{"analysisStatus":"COMPLETE or INSUFFICIENT_EVIDENCE","modeSelected":"string","modeInferred":"string or null","architecture":{"current":"string","better":"string"},"summary":"string","northStar":{"crisp":"band","sharp":"band","impactful":"band"},"scores":{"structure":0,"clarity":0,"articulation":null,"concision":0,"pacing":0,"fillerControl":0,"executivePresence":0,"authenticity":0,"compression":0,"decisiveness":0,"impact":0},"whatWorked":["maximum two observable positives"],"primaryLeak":"single concise label","secondaryObservation":"string or null","evidence":["maximum two concise excerpts with explanation"],"compression":{"assessment":"string","opportunityBand":"string","originalWords":0,"rewrittenWords":0,"rewrite":"string"},"executiveVersion":"string","punchyVersion":"string or null","drill":{"id":"short-id","name":"short label","instruction":"measurable instruction","successMeasure":"string"}}',
-    'All numeric scores are integers 0-100 or null when evidence is insufficient. Compression opportunity should be a useful range, not false precision.',
-    'Presence reflects command, economy, clarity, conviction, composure and professional authority, but mark its transcript-only limitation in the summary.',
-    'Identify no more than one primary leak. If communication is already strong, name a refinement rather than manufacturing a defect.',
-    'Enabled criteria: ' + JSON.stringify(rubric.criteria || {}),
-    'Custom instruction: ' + String(rubric.custom || 'None')
-  ].join('\n');
-  const payload = {contents:[{role:'user',parts:[{text:system+'\n\nObjective metrics:\n'+JSON.stringify(metrics)+'\n\nTranscript:\n'+transcript}]}],generationConfig:{temperature:0.2,responseMimeType:'application/json'}};
-  const request = {method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true};
-  let usedModel=model;
-  let response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(usedModel)+':generateContent?key='+encodeURIComponent(key),request);
-  if (response.getResponseCode() === 404) {
-    const available = listGenerateModels_(key);
-    const fallback = available.indexOf(APP.defaultModel) >= 0 ? APP.defaultModel : available[0];
-    if (fallback && fallback !== usedModel) {
-      usedModel=fallback;
-      response = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(usedModel)+':generateContent?key='+encodeURIComponent(key),request);
-    }
-  }
-  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) throw new Error('Gemini HTTP '+response.getResponseCode()+': '+response.getContentText().slice(0,500));
-  const data = JSON.parse(response.getContentText()), text = data.candidates && data.candidates[0] && data.candidates[0].content.parts[0].text;
-  if (!text) throw new Error('Gemini returned no review.');
-  const result=parse_(String(text).replace(/^\`\`\`json\s*|\s*\`\`\`$/g,''),{summary:text});
-  result.analysisVersion=String(rubric.analysisVersion||'2.0');
-  result.rubricVersion=String(rubric.rubricVersion||'crisp-sharp-impactful-v1');
-  result.modelUsed=usedModel;
-  result.analyzedAt=new Date().toISOString();
-  return result;
-}
-
-function getJob_(id) {
-  const sheet = sheet_(APP.jobs), row = findRow_(sheet,id);
-  if (!row) return {ok:true,status:'PENDING'};
-  const r = sheet.getRange(row,1,1,5).getValues()[0];
-  return {ok:true,jobId:r[0],status:r[2],result:parse_(r[3],r[3]||null),error:r[4]||''};
-}
-function updateJob_(id,status,result,error) { const s=sheet_(APP.jobs),r=findRow_(s,id);if(r)s.getRange(r,3,1,3).setValues([[status,result,error]]); }
-function updateSessionReview_(id,result) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([['DONE',JSON.stringify(result),new Date()]]); }
-function updateSessionStatus_(id,status,message) { const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([[status,message||s.getRange(r,18).getValue(),new Date()]]); }
-
-function setConfig_(body) {
-  const days = Math.max(1,Math.min(30,Number(body.retentionDays || 7)));
-  const model = String(body.model || APP.defaultModel).trim();
-  PropertiesService.getScriptProperties().setProperties({AUDIO_RETENTION_DAYS:String(days),GEMINI_MODEL:model},false);
-  return {ok:true,retentionDays:days,model:model};
-}
-function cleanupExpiredAudio() {
-  const sheet=sheet_(APP.sessions),last=sheet.getLastRow();if(last<2)return;
-  const rows=sheet.getRange(2,1,last-1,APP.headers.length).getValues(),now=Date.now();
-  rows.forEach((r,i)=>{const id=r[14],expiry=r[15]&&new Date(r[15]).getTime();if(id&&expiry&&expiry<=now){try{if(typeof Drive!=='undefined'&&Drive.Files)Drive.Files.remove(id);else DriveApp.getFileById(id).setTrashed(true)}catch(e){}sheet.getRange(i+2,15,1,2).setValues([['','DELETED']])}});
-}
-
-function repairTimestamps() {
-  const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));
-  ss.setSpreadsheetTimeZone('Asia/Kolkata');
-  const sessions=ss.getSheetByName(APP.sessions);
-  [2,16,19].forEach(col=>convertDateColumn_(sessions,col));
-  convertDateColumn_(ss.getSheetByName(APP.jobs),2);
-  if(sessions&&sessions.getLastRow()>1){[2,16,19].forEach(col=>sessions.getRange(2,col,sessions.getLastRow()-1,1).setNumberFormat('dd/MM/yyyy HH:mm:ss'))}
-  const jobs=ss.getSheetByName(APP.jobs);if(jobs&&jobs.getLastRow()>1)jobs.getRange(2,2,jobs.getLastRow()-1,1).setNumberFormat('dd/MM/yyyy HH:mm:ss');
-  console.log('Existing timestamps converted to India time display.');
-}
+function doGet(e){const p=e&&e.parameter||{};try{if(p.action==='bootstrap')return jsonp_(bootstrap_(),p.callback);if(p.action==='signinResult')return jsonp_(signinResult_(p.nonce),p.callback);if(!authorizedRequest_(p))return jsonp_({ok:false,error:'UNAUTHORIZED'},p.callback);if(p.action==='health')return jsonp_(health_(),p.callback);if(p.action==='list')return jsonp_({ok:true,sessions:listSessions_()},p.callback);if(p.action==='job')return jsonp_(getJob_(p.jobId),p.callback);if(p.action==='telegramPending')return jsonp_({ok:true,sessions:listTelegramPending_()},p.callback);if(p.action==='audio')return jsonp_(getAudioPayload_(p.sessionId),p.callback);return jsonp_({ok:false,error:'UNKNOWN_ACTION'},p.callback)}catch(err){return jsonp_({ok:false,error:String(err&&err.message||err)},p.callback)}}
+function doPost(e){try{const body=JSON.parse(e.postData&&e.postData.contents||'{}');if(isTelegramWebhook_(e,body))return json_(handleTelegramUpdate_(body));if(body.action==='signin')return json_(signin_(body));if(!authorizedRequest_(body))return json_({ok:false,error:'UNAUTHORIZED'});if(body.action==='save')return json_(saveSession_(body.session));if(body.action==='analyze')return json_(analyzeJob_(body));if(body.action==='config')return json_(setConfig_(body));if(body.action==='saveWords')return json_(saveWordTimestamps_(body.sessionId,body.words||[]));return json_({ok:false,error:'UNKNOWN_ACTION'})}catch(err){return json_({ok:false,error:String(err&&err.message||err)})}}
+function saveSession_(s){if(!s||!s.id||!s.transcript)throw new Error('Session id and transcript are required.');const props=PropertiesService.getScriptProperties(),sheet=sheet_(APP.sessions);let audioId='',deleteAfter='';if(s.audioDataUrl){const match=String(s.audioDataUrl).match(/^data:([^;]+);base64,(.+)$/);if(match){const bytes=Utilities.base64Decode(match[2]),ext=match[1].indexOf('mp4')>=0?'m4a':'webm';const file=DriveApp.getFolderById(props.getProperty('FOLDER_ID')).createFile(Utilities.newBlob(bytes,match[1],safe_(s.title)+'-'+s.id+'.'+ext));audioId=file.getId();deleteAfter=new Date(Date.now()+Number(props.getProperty('AUDIO_RETENTION_DAYS')||7)*86400000)}}const existing=findRow_(sheet,s.id);if(existing&&!audioId){audioId=sheet.getRange(existing,15).getValue();deleteAfter=sheet.getRange(existing,16).getValue()}const priorAi=existing?sheet.getRange(existing,17,1,2).getValues()[0]:['',''];const values=[s.id,toDate_(s.createdAt)||new Date(),s.groupId||'',s.attempt||1,s.title||'',s.context||'',s.audience||'',s.duration||0,s.transcript||'',s.timestampedTranscript||'',JSON.stringify(s.segments||[]),s.reflection||'',s.tags||'',JSON.stringify(s.metrics||{}),audioId,toDate_(deleteAfter)||'',s.aiStatus||priorAi[0]||'',s.aiReview?JSON.stringify(s.aiReview):priorAi[1]||'',new Date()];let rowNo;if(existing){sheet.getRange(existing,1,1,values.length).setValues([values]);rowNo=existing}else{sheet.appendRow(values);rowNo=sheet.getLastRow()}setSessionExtras_(sheet,rowNo,s);if(Array.isArray(s.wordTimestamps)&&s.wordTimestamps.length)saveWordTimestamps_(s.id,s.wordTimestamps);return{ok:true,id:s.id,audioDeleteAfter:deleteAfter}}
+function listSessions_(){const sheet=sheet_(APP.sessions),last=sheet.getLastRow();if(last<2)return[];return sheet.getRange(2,1,last-1,APP.headers.length).getValues().map(r=>({id:r[0],createdAt:dateText_(r[1]),groupId:r[2],attempt:r[3],title:r[4],context:r[5],audience:r[6],duration:r[7],transcript:r[8],timestampedTranscript:r[9],segments:parse_(r[10],[]),reflection:r[11],tags:r[12],metrics:parse_(r[13],{}),audioRetained:Boolean(r[14]),audioDeleteAfter:dateText_(r[15]),aiStatus:r[16],aiReview:parse_(r[17],r[17]||null),updatedAt:dateText_(r[18]),source:r[19]||'WEB',sourceMessageId:r[20]||'',sourceFileUniqueId:r[21]||'',sourceDurationMs:Number(r[22]||0),transcriptionStatus:r[23]||'',integrityStatus:r[24]||'',timestampCoverageMs:Number(r[25]||0),timingVariancePct:Number(r[26]||0),timestampSchemaVersion:r[27]||'',pauseMetrics:parse_(r[28],{}),telegramUpdateId:r[29]||''}))}
+function analyzeJob_(body){const jobs=sheet_(APP.jobs),jobId=body.jobId||Utilities.getUuid();jobs.appendRow([jobId,new Date(),'PROCESSING','','']);if(body.sessionId)updateSessionStatus_(body.sessionId,'PROCESSING','');try{const result=callGemini_(body.transcript,body.metrics||{},body.rubric||{});updateJob_(jobId,'DONE',JSON.stringify(result),'');if(body.sessionId)updateSessionReview_(body.sessionId,result);return{ok:true,jobId}}catch(err){updateJob_(jobId,'ERROR','',String(err&&err.message||err));if(body.sessionId)updateSessionStatus_(body.sessionId,'ERROR',String(err&&err.message||err));return{ok:false,jobId,error:String(err&&err.message||err)}}}
+function callGemini_(transcript,metrics,rubric){const props=PropertiesService.getScriptProperties(),key=props.getProperty('GEMINI_API_KEY');if(!key)throw new Error('GEMINI_API_KEY is not configured in Script properties.');const model=rubric.model||props.getProperty('GEMINI_MODEL')||APP.defaultModel,mode=String(rubric.mode||'Professional Update'),words=Number(metrics.words||String(transcript).trim().split(/\s+/).filter(Boolean).length);const system=['You are the Fluency OS communication coach. The product north star is CRISP, SHARP AND IMPACTFUL communication.','CRISP means point-first, clear, hierarchical and easy to follow.','SHARP means economical, precise, controlled and free of unnecessary qualification, repetition and side branches.','IMPACTFUL means the listener retains a clear takeaway, implication, decision, recommendation or action.','Coach observable communication behaviour; never judge personality or diagnose psychological traits.','Communication mode: '+mode+'. Adapt strictness to this mode.','Use transcript and objective metrics only. Preserve factual meaning in rewrites and never invent facts.',words<25?'This is a low-evidence sample. Keep measurable metrics and set deep scores to null where evidence is insufficient.':'Evidence is sufficient for a concise transcript-based coaching review.','Return valid JSON only using this schema:','{"analysisStatus":"COMPLETE or INSUFFICIENT_EVIDENCE","summary":"string","scores":{"northStar":0,"crispness":0,"structure":0,"coherence":0,"clarity":0,"concision":0,"impact":0,"executivePresence":0,"delivery":0,"articulation":0,"engagement":0,"humorWit":null,"pacing":0,"fillerControl":0,"authenticity":0,"compression":0,"decisiveness":0},"humor":{"applicability":"HIGH/MEDIUM/LOW/N/A","technique":"string or null","opportunity":"string or null","example":"string or null"},"whatWorked":["2-4 observable positives"],"needsWork":[{"dimension":"string","issue":"string","evidence":"string","coach":"specific action"}],"primaryLeak":"string","evidence":["concise evidence"],"compression":{"assessment":"string","rewrite":"string"},"executiveVersion":"string","punchyVersion":"string or null","drill":{"id":"short-id","name":"short label","instruction":"measurable instruction","successMeasure":"string"},"nextPractice":["maximum 3 priorities"]}','All numeric scores are integers 0-100 or null when evidence is insufficient. Keep deterministic facts separate from inferred scores.','North Star is CRISP + SHARP + IMPACTFUL, but do not calculate it as a naive arithmetic average.','Humor/Wit is developmental and context-sensitive. If N/A, humorWit must be null and must not reduce North Star.','Coaching must explicitly say what worked, what needs work, and no more than three priorities for the next practice.','Enabled criteria: '+JSON.stringify(rubric.criteria||{}),'Custom instruction: '+String(rubric.custom||'None')].join('\n');const payload={contents:[{role:'user',parts:[{text:system+'\n\nObjective metrics:\n'+JSON.stringify(metrics)+'\n\nTranscript:\n'+transcript}]}],generationConfig:{temperature:.2,responseMimeType:'application/json'}},request={method:'post',contentType:'application/json',payload:JSON.stringify(payload),muteHttpExceptions:true};let usedModel=model,response=UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(usedModel)+':generateContent?key='+encodeURIComponent(key),request);if(response.getResponseCode()===404){const available=listGenerateModels_(key),fallback=available.indexOf(APP.defaultModel)>=0?APP.defaultModel:available[0];if(fallback&&fallback!==usedModel){usedModel=fallback;response=UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(usedModel)+':generateContent?key='+encodeURIComponent(key),request)}}if(response.getResponseCode()<200||response.getResponseCode()>=300)throw new Error('Gemini HTTP '+response.getResponseCode()+': '+response.getContentText().slice(0,500));const data=JSON.parse(response.getContentText()),text=data.candidates&&data.candidates[0]&&data.candidates[0].content.parts[0].text;if(!text)throw new Error('Gemini returned no review.');const result=parse_(String(text).replace(/^```json\s*|\s*```$/g,''),{summary:text});result.analysisVersion=String(rubric.analysisVersion||'2.3');result.rubricVersion=String(rubric.rubricVersion||'north-star-v2.3');result.modelUsed=usedModel;result.analyzedAt=new Date().toISOString();return result}
+function getJob_(id){const sheet=sheet_(APP.jobs),row=findRow_(sheet,id);if(!row)return{ok:true,status:'PENDING'};const r=sheet.getRange(row,1,1,5).getValues()[0];return{ok:true,jobId:r[0],status:r[2],result:parse_(r[3],r[3]||null),error:r[4]||''}}
+function updateJob_(id,status,result,error){const s=sheet_(APP.jobs),r=findRow_(s,id);if(r)s.getRange(r,3,1,3).setValues([[status,result,error]])}
+function updateSessionReview_(id,result){const s=sheet_(APP.sessions),r=findRow_(s,id);if(r){s.getRange(r,17,1,3).setValues([['DONE',JSON.stringify(result),new Date()]]);writeScoreHistory_(id,result,r)}}
+function updateSessionStatus_(id,status,message){const s=sheet_(APP.sessions),r=findRow_(s,id);if(r)s.getRange(r,17,1,3).setValues([[status,message||s.getRange(r,18).getValue(),new Date()]])}
+function setConfig_(body){const days=Math.max(1,Math.min(30,Number(body.retentionDays||7))),model=String(body.model||APP.defaultModel).trim();PropertiesService.getScriptProperties().setProperties({AUDIO_RETENTION_DAYS:String(days),GEMINI_MODEL:model},false);return{ok:true,retentionDays:days,model}}
+function cleanupExpiredAudio(){const sheet=sheet_(APP.sessions),last=sheet.getLastRow();if(last<2)return;const rows=sheet.getRange(2,1,last-1,APP.headers.length).getValues(),now=Date.now();rows.forEach((r,i)=>{const id=r[14],expiry=r[15]&&new Date(r[15]).getTime();if(id&&expiry&&expiry<=now){try{DriveApp.getFileById(id).setTrashed(true)}catch(e){}sheet.getRange(i+2,15,1,2).setValues([['','DELETED']])}})}
+function repairTimestamps(){const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));ss.setSpreadsheetTimeZone('Asia/Kolkata');const sessions=ss.getSheetByName(APP.sessions);[2,16,19].forEach(col=>convertDateColumn_(sessions,col));convertDateColumn_(ss.getSheetByName(APP.jobs),2)}
 function convertDateColumn_(sheet,col){if(!sheet||sheet.getLastRow()<2)return;const range=sheet.getRange(2,col,sheet.getLastRow()-1,1),values=range.getValues().map(r=>{const d=toDate_(r[0]);return[d||r[0]]});range.setValues(values)}
-
-function health_() {
-  const p=PropertiesService.getScriptProperties();
-  const key=p.getProperty('GEMINI_API_KEY');
-  return {ok:true,database:true,drive:true,geminiConfigured:Boolean(key),retentionDays:Number(p.getProperty('AUDIO_RETENTION_DAYS')||7),model:p.getProperty('GEMINI_MODEL')||APP.defaultModel,availableModels:key?listGenerateModels_(key):[]};
-}
+function health_(){const p=PropertiesService.getScriptProperties(),key=p.getProperty('GEMINI_API_KEY');return{ok:true,database:true,drive:true,geminiConfigured:Boolean(key),retentionDays:Number(p.getProperty('AUDIO_RETENTION_DAYS')||7),model:p.getProperty('GEMINI_MODEL')||APP.defaultModel,availableModels:key?listGenerateModels_(key):[]}}
 function listGenerateModels_(key){try{const r=UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models?key='+encodeURIComponent(key),{muteHttpExceptions:true});if(r.getResponseCode()!==200)return[];return(JSON.parse(r.getContentText()).models||[]).filter(m=>(m.supportedGenerationMethods||[]).indexOf('generateContent')>=0).map(m=>String(m.name||'').replace(/^models\//,''))}catch(e){return[]}}
-function bootstrap_() {
-  const p=PropertiesService.getScriptProperties();
-  return {ok:true,authVersion:'google-v1',googleClientId:p.getProperty('GOOGLE_CLIENT_ID')||'',northStar:'Crisp • Sharp • Impactful'};
-}
-function signin_(body) {
-  const cache=CacheService.getScriptCache(),nonce=String(body.nonce||'');
-  if (!nonce || !/^[a-zA-Z0-9-]{16,80}$/.test(nonce)) return {ok:false,error:'INVALID_NONCE'};
-  try {
-    const user=verifyGoogleCredential_(body.credential);
-    const sessionToken=Utilities.getUuid()+Utilities.getUuid(),expires=21600;
-    cache.put('fluency-session-'+sessionToken,JSON.stringify({email:user.email}),expires);
-    const result={ok:true,status:'DONE',email:user.email,sessionToken:sessionToken,expiresIn:expires};
-    cache.put('fluency-signin-'+nonce,JSON.stringify(result),120);
-    recordUser_(user.email);
-    return {ok:true,status:'PROCESSING'};
-  } catch(err) {
-    cache.put('fluency-signin-'+nonce,JSON.stringify({ok:false,status:'ERROR',error:String(err&&err.message||err)}),120);
-    return {ok:false,error:String(err&&err.message||err)};
-  }
-}
-function signinResult_(nonce) {
-  const raw=CacheService.getScriptCache().get('fluency-signin-'+String(nonce||''));
-  return raw?parse_(raw,{ok:false,status:'ERROR',error:'Invalid sign-in response'}):{ok:true,status:'PENDING'};
-}
-function verifyGoogleCredential_(credential) {
-  if(!credential)throw new Error('Google credential is missing.');
-  const p=PropertiesService.getScriptProperties(),clientId=p.getProperty('GOOGLE_CLIENT_ID');
-  if(!clientId)throw new Error('GOOGLE_CLIENT_ID is not configured.');
-  const response=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(credential),{muteHttpExceptions:true});
-  if(response.getResponseCode()!==200)throw new Error('Google could not verify this sign-in.');
-  const data=JSON.parse(response.getContentText());
-  if(data.aud!==clientId)throw new Error('Google sign-in was issued for another application.');
-  if(String(data.email_verified)!=='true')throw new Error('Google email is not verified.');
-  const email=String(data.email||'').toLowerCase(),allowed=String(p.getProperty('ALLOWED_EMAILS')||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);
-  if(!email||allowed.indexOf(email)<0)throw new Error('This Gmail account is not approved for Fluency OS.');
-  return {email:email};
-}
-function authorizedRequest_(request) {
-  if(request&&request.sessionToken){
-    const raw=CacheService.getScriptCache().get('fluency-session-'+String(request.sessionToken));
-    if(raw)return true;
-  }
-  return authorized_(request&&request.token);
-}
-function recordUser_(email) {
-  const s=sheet_(APP.users),last=s.getLastRow(),now=new Date();
-  if(last>1){
-    const found=s.getRange(2,1,last-1,1).createTextFinder(email).matchEntireCell(true).findNext();
-    if(found){s.getRange(found.getRow(),2,1,4).setValues([['ACTIVE',s.getRange(found.getRow(),3).getValue()||now,now,'google-v1']]);return;}
-  }
-  s.appendRow([email,'ACTIVE',now,now,'google-v1']);
-}
-
-function authorized_(token){const expected=PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');return Boolean(expected&&token&&Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token)).join(',')===Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(expected)).join(','))}
+function bootstrap_(){const p=PropertiesService.getScriptProperties();return{ok:true,authVersion:'google-v1',googleClientId:p.getProperty('GOOGLE_CLIENT_ID')||'',northStar:'Crisp • Sharp • Impactful'}}
+function signin_(body){const cache=CacheService.getScriptCache(),nonce=String(body.nonce||'');if(!nonce||!/^[a-zA-Z0-9-]{16,80}$/.test(nonce))return{ok:false,error:'INVALID_NONCE'};try{const user=verifyGoogleCredential_(body.credential),sessionToken=Utilities.getUuid()+Utilities.getUuid(),expires=21600;cache.put('fluency-session-'+sessionToken,JSON.stringify({email:user.email}),expires);cache.put('fluency-signin-'+nonce,JSON.stringify({ok:true,status:'DONE',email:user.email,sessionToken,expiresIn:expires}),120);recordUser_(user.email);return{ok:true,status:'PROCESSING'}}catch(err){cache.put('fluency-signin-'+nonce,JSON.stringify({ok:false,status:'ERROR',error:String(err&&err.message||err)}),120);return{ok:false,error:String(err&&err.message||err)}}}
+function signinResult_(nonce){const raw=CacheService.getScriptCache().get('fluency-signin-'+String(nonce||''));return raw?parse_(raw,{ok:false,status:'ERROR',error:'Invalid sign-in response'}):{ok:true,status:'PENDING'}}
+function verifyGoogleCredential_(credential){if(!credential)throw new Error('Google credential is missing.');const p=PropertiesService.getScriptProperties(),clientId=p.getProperty('GOOGLE_CLIENT_ID');if(!clientId)throw new Error('GOOGLE_CLIENT_ID is not configured.');const response=UrlFetchApp.fetch('https://oauth2.googleapis.com/tokeninfo?id_token='+encodeURIComponent(credential),{muteHttpExceptions:true});if(response.getResponseCode()!==200)throw new Error('Google could not verify this sign-in.');const data=JSON.parse(response.getContentText());if(data.aud!==clientId)throw new Error('Google sign-in was issued for another application.');const email=String(data.email||'').toLowerCase(),allowed=String(p.getProperty('ALLOWED_EMAILS')||'').toLowerCase().split(',').map(x=>x.trim()).filter(Boolean);if(!email||allowed.indexOf(email)<0)throw new Error('This Gmail account is not approved for Fluency OS.');return{email}}
+function authorizedRequest_(request){if(request&&request.sessionToken){const raw=CacheService.getScriptCache().get('fluency-session-'+String(request.sessionToken));if(raw)return true}return authorized_(request&&request.token)}
+function recordUser_(email){const s=sheet_(APP.users),last=s.getLastRow(),now=new Date();if(last>1){const found=s.getRange(2,1,last-1,1).createTextFinder(email).matchEntireCell(true).findNext();if(found){s.getRange(found.getRow(),2,1,4).setValues([['ACTIVE',s.getRange(found.getRow(),3).getValue()||now,now,'google-v1']]);return}}s.appendRow([email,'ACTIVE',now,now,'google-v1'])}
+function authorized_(token){const expected=PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN');return Boolean(expected&&token&&String(token)===String(expected))}
 function sheet_(name){const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));return ss.getSheetByName(name)}
 function ensureSheet_(ss,name,headers){let s=ss.getSheetByName(name);if(!s)s=ss.insertSheet(name);if(s.getLastRow()===0)s.appendRow(headers);return s}
 function findRow_(sheet,id){if(!id||sheet.getLastRow()<2)return 0;const f=sheet.getRange(2,1,sheet.getLastRow()-1,1).createTextFinder(String(id)).matchEntireCell(true).findNext();return f?f.getRow():0}
@@ -267,3 +53,21 @@ function toDate_(v){if(v instanceof Date&&!isNaN(v.getTime()))return v;if(!v)ret
 function safe_(s){return String(s||'recording').replace(/[^a-z0-9_-]+/gi,'-').slice(0,80)}
 function json_(o){return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON)}
 function jsonp_(o,cb){const body=cb?String(cb).replace(/[^a-zA-Z0-9_.$]/g,'')+'('+JSON.stringify(o)+');':JSON.stringify(o);return ContentService.createTextOutput(body).setMimeType(cb?ContentService.MimeType.JAVASCRIPT:ContentService.MimeType.JSON)}
+function ensureHeaders_(sheet,headers){if(!sheet)return;const current=sheet.getLastColumn()?sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String):[],merged=current.slice();headers.forEach(h=>{if(merged.indexOf(h)<0)merged.push(h)});if(merged.length>sheet.getMaxColumns())sheet.insertColumnsAfter(sheet.getMaxColumns(),merged.length-sheet.getMaxColumns());if(merged.length)sheet.getRange(1,1,1,merged.length).setValues([merged])}
+function headerMap_(sheet){const h=sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0].map(String),m={};h.forEach((x,i)=>m[x]=i+1);return m}
+function ensureScoreHistoryColumns_(ss){const base=['Date','Session ID','Title','Duration (sec)','WPM','Fillers','AI Status','Structure','Clarity','Articulation','Concision','Pacing','Filler Control','Executive Presence','Authenticity','Overall','Primary Lever','Practice Challenge','Transcript Confidence'],extra=['Coherence','Impact','Crispness','Delivery','Engagement','Humor / Wit','Humor Applicability','North Star','Rubric Version'];const sh=ensureSheet_(ss,'Score History',base);ensureHeaders_(sh,base.concat(extra))}
+function setSessionExtras_(sheet,rowNo,s){const m=headerMap_(sheet),fields={source:s.source||'',sourceMessageId:s.sourceMessageId||'',sourceFileUniqueId:s.sourceFileUniqueId||'',sourceDurationMs:s.sourceDurationMs||'',transcriptionStatus:s.transcriptionStatus||'',integrityStatus:s.integrityStatus||'',timestampCoverageMs:s.timestampCoverageMs||'',timingVariancePct:s.timingVariancePct||'',timestampSchemaVersion:s.timestampSchemaVersion||'',pauseMetricsJson:s.pauseMetricsJson?(typeof s.pauseMetricsJson==='string'?s.pauseMetricsJson:JSON.stringify(s.pauseMetricsJson)):'',telegramUpdateId:s.telegramUpdateId||''};Object.keys(fields).forEach(k=>{if(m[k]&&fields[k]!==''&&fields[k]!=null)sheet.getRange(rowNo,m[k]).setValue(fields[k])})}
+function listTelegramPending_(){return listSessions_().filter(s=>s.source==='TELEGRAM'&&['READY_FOR_LOCAL_TRANSCRIPTION','TIMING_ANOMALY'].indexOf(s.transcriptionStatus)>=0)}
+function isTelegramWebhook_(e,body){const p=PropertiesService.getScriptProperties(),secret=p.getProperty('TELEGRAM_WEBHOOK_SECRET');return Boolean(body&&body.update_id!=null&&secret&&e&&e.parameter&&String(e.parameter.telegram||'')===secret)}
+function handleTelegramUpdate_(update){const p=PropertiesService.getScriptProperties(),msg=update.message||update.edited_message||{},chat=String(msg.chat&&msg.chat.id||''),user=String(msg.from&&msg.from.id||''),allowedChat=String(p.getProperty('TELEGRAM_CHAT_ID')||''),allowedUser=String(p.getProperty('TELEGRAM_USER_ID')||'');if(allowedChat&&chat!==allowedChat)return{ok:true,ignored:true,reason:'CHAT_NOT_ALLOWED'};if(allowedUser&&user!==allowedUser)return{ok:true,ignored:true,reason:'USER_NOT_ALLOWED'};const media=msg.voice||msg.audio;if(!media||!media.file_id)return{ok:true,ignored:true,reason:'NO_AUDIO'};const key='TG:'+chat+':'+String(msg.message_id||'');if(findSessionByExtra_('sourceMessageId',key))return{ok:true,duplicate:true};const token=p.getProperty('TELEGRAM_BOT_TOKEN');if(!token)throw new Error('TELEGRAM_BOT_TOKEN is not configured.');if(Number(media.file_size||0)>20*1024*1024)return{ok:false,error:'FILE_TOO_LARGE'};const fi=telegramApi_('getFile',{file_id:media.file_id}),path=fi&&fi.result&&fi.result.file_path;if(!path)throw new Error('Telegram getFile returned no file path.');const res=UrlFetchApp.fetch('https://api.telegram.org/file/bot'+token+'/'+path,{muteHttpExceptions:true});if(res.getResponseCode()!==200)throw new Error('Telegram audio download HTTP '+res.getResponseCode());const id=Utilities.getUuid(),ext=(path.split('.').pop()||'ogg').replace(/[^a-z0-9]/gi,''),file=DriveApp.getFolderById(p.getProperty('FOLDER_ID')).createFile(res.getBlob().setName('telegram-'+id+'.'+ext)),expiry=new Date(Date.now()+Number(p.getProperty('AUDIO_RETENTION_DAYS')||7)*86400000),sh=sheet_(APP.sessions);sh.appendRow([id,new Date(),'',1,'Telegram voice','Conversation','',Number(media.duration||0),'','',JSON.stringify([]),'','',JSON.stringify({words:0,fillers:0,rate:0,wpm:0}),file.getId(),expiry,'','',new Date(),'TELEGRAM',key,String(media.file_unique_id||''),Number(media.duration||0)*1000,'READY_FOR_LOCAL_TRANSCRIPTION','PENDING','','','WORD_V1','',String(update.update_id||'')]);telegramSend_(chat,'Recording received • '+fmtDuration_(media.duration)+'\nReady in Fluency OS for local transcription.');return{ok:true,sessionId:id,status:'READY_FOR_LOCAL_TRANSCRIPTION'}}
+function telegramApi_(method,payload){const t=PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN'),r=UrlFetchApp.fetch('https://api.telegram.org/bot'+t+'/'+method,{method:'post',contentType:'application/json',payload:JSON.stringify(payload||{}),muteHttpExceptions:true});if(r.getResponseCode()<200||r.getResponseCode()>=300)throw new Error('Telegram '+method+' HTTP '+r.getResponseCode());return JSON.parse(r.getContentText())}
+function telegramSend_(chat,text){try{telegramApi_('sendMessage',{chat_id:chat,text})}catch(e){}}
+function fmtDuration_(s){s=Math.max(0,Math.round(Number(s)||0));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function findSessionByExtra_(field,value){const sh=sheet_(APP.sessions),m=headerMap_(sh),col=m[field];if(!col||sh.getLastRow()<2)return 0;const f=sh.getRange(2,col,sh.getLastRow()-1,1).createTextFinder(String(value)).matchEntireCell(true).findNext();return f?f.getRow():0}
+function getAudioPayload_(sessionId){if(!sessionId)throw new Error('sessionId required');const sh=sheet_(APP.sessions),r=findRow_(sh,sessionId);if(!r)throw new Error('Session not found.');const vals=sh.getRange(r,1,1,APP.headers.length).getValues()[0],fileId=vals[14];if(!fileId)throw new Error('Audio is no longer retained for this session.');const f=DriveApp.getFileById(fileId),b=f.getBlob(),bytes=b.getBytes();if(bytes.length>12*1024*1024)throw new Error('Audio payload is too large for browser handoff.');return{ok:true,sessionId,name:f.getName(),mimeType:b.getContentType()||'audio/ogg',base64:Utilities.base64Encode(bytes),duration:Number(vals[7]||0),source:vals[19]||'WEB'}}
+function saveWordTimestamps_(sessionId,words){if(!sessionId||!Array.isArray(words)||!words.length)return{ok:true,words:0};const sh=sheet_('Word Timestamps'),clean=words.map((w,i)=>({seq:i+1,word:String(w.word||w.text||'').trim(),startMs:Math.max(0,Number(w.startMs!=null?w.startMs:Number(w.start||0)*1000)),endMs:Math.max(0,Number(w.endMs!=null?w.endMs:Number(w.end||0)*1000))})).filter(w=>w.word&&isFinite(w.startMs)&&isFinite(w.endMs)&&w.endMs>=w.startMs);if(!clean.length)return{ok:true,words:0};const rows=clean.map((w,i)=>[sessionId,i+1,w.word,Math.round(w.startMs),Math.round(w.endMs),'','',i?Math.max(0,Math.round(w.startMs-clean[i-1].endMs)):'',i<clean.length-1?Math.max(0,Math.round(clean[i+1].startMs-w.endMs)):'','WORD_V1',new Date()]);sh.getRange(sh.getLastRow()+1,1,rows.length,rows[0].length).setValues(rows);const coverage=Math.round(clean[clean.length-1].endMs),srow=findRow_(sheet_(APP.sessions),sessionId),ss=sheet_(APP.sessions),session=ss.getRange(srow,1,1,APP.headers.length).getValues()[0],sourceMs=Number(session[22]||session[7]*1000||0),variance=sourceMs?Math.round(((coverage-sourceMs)/sourceMs)*1000)/10:0,integrity=sourceMs&&(coverage>sourceMs*1.10||coverage<sourceMs*.75)?'FAIL':'PASS',m=headerMap_(ss);if(srow){ss.getRange(srow,m.timestampCoverageMs).setValue(coverage);ss.getRange(srow,m.timingVariancePct).setValue(variance);ss.getRange(srow,m.integrityStatus).setValue(integrity);ss.getRange(srow,m.transcriptionStatus).setValue(integrity==='FAIL'?'TIMING_ANOMALY':'COMPLETE')}return{ok:true,words:clean.length,coverageMs:coverage,integrityStatus:integrity}}
+function writeScoreHistory_(id,result,sessionRow){try{const ss=SpreadsheetApp.openById(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));ensureScoreHistoryColumns_(ss);const sh=ss.getSheetByName('Score History'),m=headerMap_(sh),session=sheet_(APP.sessions).getRange(sessionRow,1,1,APP.headers.length).getValues()[0],scores=result.scores||{},drill=result.drill||{},vals={'Date':new Date(),'Session ID':id,'Title':session[4],'Duration (sec)':session[7],'WPM':parse_(session[13],{}).wpm||'','Fillers':parse_(session[13],{}).fillers||0,'AI Status':'DONE','Structure':scores.structure,'Clarity':scores.clarity,'Articulation':scores.articulation,'Concision':scores.concision,'Pacing':scores.pacing,'Filler Control':scores.fillerControl,'Executive Presence':scores.executivePresence,'Authenticity':scores.authenticity,'Overall':scores.northStar,'Primary Lever':result.primaryLeak||'','Practice Challenge':drill.instruction||'','Coherence':scores.coherence,'Impact':scores.impact,'Crispness':scores.crispness,'Delivery':scores.delivery,'Engagement':scores.engagement,'Humor / Wit':scores.humorWit,'Humor Applicability':result.humor&&result.humor.applicability||'N/A','North Star':scores.northStar,'Rubric Version':result.rubricVersion||'north-star-v2.3'},row=new Array(sh.getLastColumn()).fill('');Object.keys(vals).forEach(k=>{if(m[k])row[m[k]-1]=vals[k]==null?'':vals[k]});sh.appendRow(row)}catch(e){console.log(e.message)}}
+function Telegram_setupWebhook(){const p=PropertiesService.getScriptProperties(),token=p.getProperty('TELEGRAM_BOT_TOKEN'),chat=p.getProperty('TELEGRAM_CHAT_ID');if(!token||!chat)throw new Error('Telegram properties are incomplete.');const base=p.getProperty('WEB_APP_URL')||ScriptApp.getService().getUrl();if(!base)throw new Error('Deploy this Apps Script as a Web App first.');const secret=p.getProperty('TELEGRAM_WEBHOOK_SECRET'),url=base+(base.indexOf('?')>=0?'&':'?')+'telegram='+encodeURIComponent(secret);return telegramApi_('setWebhook',{url,allowed_updates:['message'],drop_pending_updates:false})}
+function Telegram_getWebhookInfo(){return telegramApi_('getWebhookInfo',{})}
+function Telegram_deleteWebhook(){return telegramApi_('deleteWebhook',{drop_pending_updates:false})}
+function FluencyV23_setup(){const r=setup();return Object.assign({},r,{version:'2.3',telegramWebhookSecretConfigured:Boolean(PropertiesService.getScriptProperties().getProperty('TELEGRAM_WEBHOOK_SECRET'))})}
