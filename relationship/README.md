@@ -1,23 +1,21 @@
-# Relationship System web frontend
+# Relationship System — migration staging
 
-This branch adds an HTTPS-hosted Relationship System frontend under /relationship/ without changing the existing Fluency app.
+This is the staging copy for the Relationship System GitHub frontend.
+
+Target structure requested by the user:
+- New top-level repository: R&D
+- Relationship System under that repository
+- Existing fluent-me repository remains the Fluency application and should not become the permanent home of Relationship System.
+
+Current connector limitation:
+The connected GitHub integration can create branches/files/commits in existing repositories, but it does not expose repository creation. Therefore this branch is retained only as staging until the empty R&D repository exists.
 
 Architecture:
-GitHub Pages frontend → Apps Script API → Google Sheets + Gemini.
+GitHub Pages HTTPS frontend → Apps Script HTTP RPC bridge → Google Sheets + Gemini.
 
-Why: microphone recording requires a normal secure web context; Apps Script HTML Service is sandboxed.
+Workflow invariant:
+Saved draft → Needs Your Review immediately.
+Reviewed + unresolved → Pending Completion.
+Only Reviewed records → Insights / Daily Summary.
 
-The frontend supports:
-- Speak via MediaRecorder/getUserMedia
-- Write
-- Gemini transcription through the Apps Script backend
-- comprehensive field assessment
-- focused clarification questions
-- explicit Ignore for this record
-- completeness gate
-- save to Needs Your Review
-- dashboard/review/insight backend loading
-
-The existing Apps Script business logic remains authoritative. The backend must expose the RPC bridge and be deployed as /exec. Put that URL in relationship/config.js or enter it once in the Backend connection panel.
-
-This branch intentionally does not modify the root Fluency application.
+Backend package required: Relationship System v1.5 Review Visibility + API.
