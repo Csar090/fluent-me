@@ -91,7 +91,9 @@ function handleTelegramUpdate_(update){
     try{
       sh.appendRow([id,new Date(Number(msg.date||Date.now()/1000)*1000),'',1,msg.caption||media.file_name||'Telegram voice','Conversation','',Number(media.duration||0),'','',JSON.stringify([]),'','',JSON.stringify({words:0,fillers:0,rate:0,wpm:0}),'','','','',new Date(),'TELEGRAM',key,String(media.file_unique_id||''),Number(media.duration||0)*1000,'READY_FOR_LOCAL_TRANSCRIPTION','PENDING','','','WORD_V1','',String(update.update_id||'')]);
       inbox.getRange(auditRow,10).setValue(id);const sessionRow=sh.getLastRow(),audio=downloadTelegramAudio_(media.file_id,id,media.file_size);sh.getRange(sessionRow,15,1,2).setValues([[audio.id,audio.expiry]]);
-      inbox.getRange(auditRow,10,1,3).setValues([[id,'READY_FOR_LOCAL_TRANSCRIPTION','']]);return{ok:true,sessionId:id,status:'READY_FOR_LOCAL_TRANSCRIPTION'};
+      inbox.getRange(auditRow,10,1,3).setValues([[id,'READY_FOR_LOCAL_TRANSCRIPTION','']]);
+      telegramSend_(chat,'Fluency OS received your recording and queued it for local transcription. Open the dashboard Library to continue; Gemini review will run only when you choose a perspective.');
+      return{ok:true,sessionId:id,status:'READY_FOR_LOCAL_TRANSCRIPTION'};
     }catch(e){const failed=findRow_(sh,id);if(failed)sh.getRange(failed,24,1,2).setValues([['INGESTION_ERROR',String(e.message||e)]]);inbox.getRange(auditRow,11,1,2).setValues([['ERROR',String(e.message||e)]]);throw e}
   }finally{lock.releaseLock()}
 }
