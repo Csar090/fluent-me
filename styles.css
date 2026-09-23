@@ -33,3 +33,6 @@ fieldset{border:1px solid var(--line);border-radius:12px;margin:14px 0;padding:1
   .account-badge{max-width:130px}
   .focus-meta{grid-template-columns:1fr}
 }
+
+/* Keep private views hidden until server-approved Google sign-in. */
+.auth-locked main,.auth-locked nav,.auth-locked .header-actions{display:none!important} #loginGate{max-width:540px;margin:40px auto}html:not(.auth-locked) #loginGate{display:none}

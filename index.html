@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="auth-locked">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#17233c">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
@@ -14,6 +15,7 @@
   <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1><span class="north-star">CRISP • SHARP • IMPACTFUL</span></div>
   <div class="header-actions"><span id="accountBadge" class="account-badge">Local mode</span><button id="exportBtn">Backup</button></div>
 </header>
+<section id="loginGate" class="card"><h2>Sign in to Fluency OS</h2><p>Use your approved Gmail account to access your recordings, transcripts and reviews.</p><div id="googleSignInButton" class="google-signin"></div><p id="loginStatus" class="note" role="status">Connecting to Google sign-in…</p></section>
 <nav>
   <button class="active" data-tab="capture">Capture</button>
   <button data-tab="library">Library</button>
@@ -86,7 +88,7 @@
   <section id="settings" class="tab">
     <article class="card">
       <h2>Privacy & settings</h2>
-      <p>Sessions remain in this browser using IndexedDB. GitHub hosts only the app code.</p>
+      <p>Sessions are encrypted in this browser and require approved Google sign-in. GitHub hosts only the app code.</p>
       <label>Filler words<textarea id="fillerWords" rows="3">um,uh,like,you know,basically,actually,so,I mean,kind of</textarea></label>
       <label>Long pause threshold (seconds)<input id="pauseThreshold" type="number" min="0.5" max="5" step="0.1" value="1"></label>
       <label class="check"><input id="liveTranscript" type="checkbox" checked> Try live browser transcription</label>
@@ -94,13 +96,8 @@
       <p class="note">The first on-device transcription downloads a small language model. Later sessions reuse the cache.</p>
       <h3>Google account & cloud</h3>
       <p class="note">Sign in once with your approved Gmail account. Fluency OS will reconnect the linked database and Drive automatically on this device.</p>
-      <div id="googleSignInButton" class="google-signin"></div>
+
       <div id="signedInPanel" class="signed-in-panel" hidden><b id="signedInEmail"></b><button id="signOutBtn" type="button">Sign out</button></div>
-      <details class="advanced-connection"><summary>Legacy connection fallback</summary>
-        <p class="note">Kept temporarily so the working deployment is not interrupted during Gmail migration.</p>
-        <label>Google backend URL<input id="cloudUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
-        <label>Private access token<input id="cloudToken" type="password" autocomplete="off"></label>
-      </details>
       <div class="grid"><label>Audio retention<select id="retentionDays"><option value="7">7 days</option><option value="15">15 days</option></select></label><label>Gemini model<select id="geminiModel"><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (recommended)</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option></select></label></div>
       <fieldset><legend>Communication coaching criteria</legend>
         <label class="check"><input class="criterion" type="checkbox" value="structure" checked> Structure</label>
@@ -129,9 +126,10 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="secure-storage.js"></script>
 <script src="enhancements.js"></script>
 <script src="cloud.js"></script>
 <script src="fluency-v23.js"></script>
-<script src="telegram-ux.js"></script>
+<script src="saved-reviews.js"></script>
 </body>
 </html>
