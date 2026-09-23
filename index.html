@@ -12,7 +12,7 @@
 </head>
 <body>
 <header>
-  <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1><span class="north-star">CRISP • SHARP • IMPACTFUL</span></div>
+  <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1></div>
   <div class="header-actions"><span id="accountBadge" class="account-badge">Local mode</span><button id="exportBtn">Backup</button></div>
 </header>
 <section id="loginGate" class="card"><h2>Sign in to Fluency OS</h2><p>Use your approved Gmail account to access your recordings, transcripts and reviews.</p><div id="googleSignInButton" class="google-signin"></div><p id="loginStatus" class="note" role="status">Connecting to Google sign-in…</p></section>
@@ -28,7 +28,7 @@
       <span class="eyebrow">TODAY / CURRENT COACHING FOCUS</span>
       <h2 id="currentFocusTitle">HEADLINE FIRST</h2>
       <p id="currentFocusText">State the central point early, then support it with no more than three relevant points.</p>
-      <div class="focus-meta"><span><b>Latest leak</b><em id="latestLeak">Waiting for your next reviewed recording</em></span><span><b>North star</b><em>Crisp • Sharp • Impactful</em></span></div>
+      <div class="focus-meta"><span><b>Latest leak</b><em id="latestLeak">Waiting for your next reviewed recording</em></span></div>
     </article>
     <article class="card hero">
       <span class="eyebrow">RECORD → REVIEW → PRACTISE → COMPARE</span>
@@ -44,7 +44,7 @@
       <button id="recordBtn" class="record">● Start recording</button>
       <audio id="playback" controls hidden></audio>
       <p id="support" class="note"></p>
-      <label>Transcript<textarea id="transcript" rows="8" placeholder="Your recorded audio will be transcribed after you stop. You can edit the final transcript."></textarea></label>
+      <label>Review and correct transcript<textarea id="transcript" rows="8" placeholder="Your recorded audio will be transcribed after you stop. Correct any errors here before saving or requesting AI review."></textarea></label>
       <button id="redoTranscriptBtn" hidden>↻ Redo complete transcription from audio</button>
       <div id="highlightedTranscript" class="transcript-view empty">Filler highlighting appears here after transcription.</div>
       <label>Timestamped transcript</label>
@@ -63,7 +63,7 @@
       <label>My reflection<textarea id="reflection" rows="3" placeholder="What worked? What is the one lever for next time?"></textarea></label>
       <label>Tags<input id="tags" placeholder="executive-presence, structure"></label>
       <label class="check"><input id="retainAudio" type="checkbox" checked> Retain audio on this device</label>
-      <div class="button-row"><button id="saveBtn" class="primary">Save sample</button><button id="repeatBtn" hidden>Save & record again</button></div>
+      <div class="button-row"><button id="saveBtn" class="primary">Save sample</button><button id="repeatBtn" hidden>Start next attempt</button></div>
     </article>
     <article id="comparePanel" class="card" hidden>
       <span class="eyebrow">ATTEMPT COMPARISON</span><h2>What changed?</h2>
