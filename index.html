@@ -6,13 +6,13 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#17233c">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=20260923-2">
-  <link rel="stylesheet" href="fluency-v23.css?v=20260923-2">
+  <link rel="stylesheet" href="styles.css?v=20260923-3">
+  <link rel="stylesheet" href="fluency-v23.css?v=20260923-3">
   <title>Fluency OS</title>
 </head>
 <body>
 <header>
-  <div><small>PRIVATE • LOCAL-FIRST</small><h1>Fluency OS</h1></div>
+  <div><small>PRIVATE • LOCAL-FIRST</small><span class="note" style="margin-left:12px">v2.7</span><h1>Fluency OS</h1></div>
   <div class="header-actions"><span id="accountBadge" class="account-badge">Local mode</span><button id="exportBtn">Backup</button></div>
 </header>
 <section id="loginGate" class="card"><h2>Sign in to Fluency OS</h2><p>Use your approved Gmail account to access your recordings, transcripts and reviews.</p><div id="googleSignInButton" class="google-signin"></div><p id="loginStatus" class="note" role="status">Connecting to Google sign-in…</p></section>
@@ -40,23 +40,26 @@
       </div>
       <input id="sessionId" type="hidden"><input id="groupId" type="hidden"><input id="attemptNo" type="hidden" value="1">
       <div class="attempt-badge" id="attemptBadge">Attempt 1</div>
-      <div class="recorder"><div id="pulse" class="pulse"></div><strong id="timer">00:00</strong><span id="status">Ready</span></div>
+      <p id="practiceFocus" class="capture-focus" hidden></p>
+      <div id="recorderSection" class="recorder"><div id="pulse" class="pulse"></div><strong id="timer">00:00</strong><span id="status">Ready</span></div>
       <button id="recordBtn" class="record">● Start recording</button>
       <audio id="playback" controls hidden></audio>
       <p id="support" class="note"></p>
+      <section id="transcriptSection"><div id="transcriptBody">
       <label>Review and correct transcript<textarea id="transcript" rows="8" placeholder="Your recorded audio will be transcribed after you stop. Correct any errors here before saving or requesting AI review."></textarea></label>
+      <button id="saveCorrectionsBtn">Save corrections</button>
       <button id="redoTranscriptBtn" hidden>↻ Redo complete transcription from audio</button>
       <div id="highlightedTranscript" class="transcript-view empty">Filler highlighting appears here after transcription.</div>
-      <label>Timestamped transcript</label>
+      </div></section>
       <div id="timestampSegments" class="segments empty">Timestamped speech segments will appear here. Tap a segment to play from that point.</div>
       <textarea id="timestampedTranscript" hidden></textarea>
       <div id="metrics" class="metrics"></div>
       <div id="reviewPanel" class="review-panel" hidden>
-        <h3>Crisp • Sharp • Impactful review</h3>
+        <h3>Communication review</h3>
         <div id="reviewSnapshot" class="review-grid"></div>
         <div class="coach strength"><b>What worked</b><span id="coachStrength"></span></div>
         <div class="coach focus"><b>Primary communication leak</b><span id="coachFocus"></span></div>
-        <div class="coach challenge"><b>One drill</b><span id="coachChallenge"></span></div>
+        <div class="coach challenge"><b>Next practice</b><span id="coachChallenge"></span><button id="practiceBtn">Record next attempt</button></div>
         <div class="button-row"><button id="aiReviewBtn" class="primary">Review with Gemini AI</button><button id="copyCoachBtn">Copy review prompt</button></div>
         <div id="aiStatus" class="note"></div><div id="aiResult" class="ai-result" hidden></div>
       </div>
@@ -64,6 +67,7 @@
       <label>Tags<input id="tags" placeholder="executive-presence, structure"></label>
       <label class="check"><input id="retainAudio" type="checkbox" checked> Retain audio on this device</label>
       <div class="button-row"><button id="saveBtn" class="primary">Save sample</button><button id="repeatBtn" hidden>Start next attempt</button></div>
+      <p id="captureSaveStatus" class="note" role="status"></p>
     </article>
     <article id="comparePanel" class="card" hidden>
       <span class="eyebrow">ATTEMPT COMPARISON</span><h2>What changed?</h2>
@@ -81,7 +85,7 @@
 
   <section id="progress" class="tab">
     <div class="stats"><div><b id="sampleCount">0</b><span>samples</span></div><div><b id="totalMinutes">0</b><span>minutes</span></div><div><b id="avgFillers">—</b><span>fillers / 100</span></div></div>
-    <article class="card"><h2>Your baseline</h2><p class="note">Compared against your own earlier attempts—not a generic ideal.</p><canvas id="chart" width="700" height="260"></canvas></article>
+    <article class="card"><h2>Communication progress</h2><p class="note">Your latest review of each current transcript, one point per attempt. Unreviewed dimensions stay blank. Scores reflect transcript evidence, not vocal delivery.</p><div id="dimensionProgress"></div><canvas id="chart" width="700" height="260" hidden></canvas></article>
     <article class="card"><h2>Weekly summary</h2><div id="weeklySummary" class="review-grid"></div></article>
   </section>
 
@@ -110,7 +114,7 @@
         <label class="check"><input class="criterion" type="checkbox" value="impact" checked> Impact</label>
         <label class="check"><input class="criterion" type="checkbox" value="executivePresence" checked> Executive presence</label>
         <label class="check"><input class="criterion" type="checkbox" value="authenticity" checked> Authenticity</label>
-        <label class="check"><input class="criterion" type="checkbox" value="humorWit" checked> Humor &amp; Wit (context-sensitive)</label>
+        <label class="check"><input class="criterion" type="checkbox" value="northStar" checked> North Star (overall communication effectiveness)</label>
       </fieldset>
       <label>Custom coaching instruction<textarea id="aiCustom" rows="3" placeholder="Example: Focus on conclusion-first communication for senior stakeholders."></textarea></label>
       <div class="button-row"><button id="saveCloudBtn">Save configuration</button><button id="testCloudBtn">Test connection</button><button id="syncCloudBtn">Sync history</button></div>
@@ -123,15 +127,18 @@
     </article>
   </section>
 </main>
+<aside id="captureShortcuts" class="section-shortcuts" aria-label="Quick section navigation"><button data-jump="currentFocusCard">Focus</button><button data-jump="telegramInboxCard">Telegram</button><button data-jump="recorderSection">Record</button><button data-jump="transcriptSection">Transcript</button><button data-jump="timestampSegments">Timestamps</button><button data-jump="reviewPanel">Review</button><button data-jump="comparePanel">Compare</button></aside>
 <dialog id="sessionDialog"><button id="closeDialog" class="dialog-close">Close</button><div id="sessionDetail"></div></dialog>
 <div id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=20260923-2"></script>
-<script src="app.js?v=20260923-2"></script>
-<script src="secure-storage.js?v=20260923-2"></script>
-<script src="enhancements.js?v=20260923-2"></script>
-<script src="cloud.js?v=20260923-2"></script>
-<script src="fluency-v23.js?v=20260923-2"></script>
-<script src="saved-reviews.js?v=20260923-2"></script>
+<script src="config.js?v=20260923-3"></script>
+<script src="app.js?v=20260923-3"></script>
+<script src="secure-storage.js?v=20260923-3"></script>
+<script src="enhancements.js?v=20260923-3"></script>
+<script src="cloud.js?v=20260923-3"></script>
+<script src="fluency-v23.js?v=20260923-3"></script>
+<script src="saved-reviews.js?v=20260923-3"></script>
+<script src="progress.js?v=20260923-3"></script>
+<script src="workflow.js?v=20260923-3"></script>
 </body>
 </html>

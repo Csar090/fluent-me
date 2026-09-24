@@ -23,4 +23,12 @@ Do not create another deployment. Editing the existing deployment updates the ba
 
 The browser sends the short-lived Google ID credential by POST. The backend verifies its audience, verified email and the `ALLOWED_EMAILS` allowlist, then issues a temporary Fluency OS session token. Gmail credentials and Gemini keys are never stored in the repository.
 
-The previous private access token remains supported only as a migration fallback. Existing recordings and the current database are preserved.
+New application sessions last eight hours and are stored durably under hashed token identifiers in Script properties. Every protected request still checks expiry and the approved-email list. Sign-out revokes the token. Valid old cache-backed sessions can migrate without extending their original expiry. Transient browser network failures do not discard sign-in.
+
+## Telegram delivery
+
+Run `Telegram_enablePolling` once after updating the backend. It disconnects the failing webhook without dropping pending updates, imports the waiting messages, and installs a one-minute `Telegram_poll` trigger. Keep the existing bot token, chat allowlist, database and audio folder. Cloudflare is no longer needed for ingestion.
+
+`Telegram_getWebhookInfo` logs a sanitized delivery report: mode, last check, last receipt, and errors. The dashboard exposes the same report through **Telegram → Check delivery**. Failed downloads are retried without advancing past the failed update; files over the 12 MB handoff limit remain visible as failed imports without blocking later messages.
+
+Do not run `Telegram_setupWebhook` while polling is enabled. A bot must use one delivery mechanism at a time.
