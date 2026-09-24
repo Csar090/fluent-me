@@ -29,7 +29,7 @@
     const text=$('transcript').value.trim(),base=Object.assign({},prior,window.FluencyV23?.activeTelegram||{});
     const metrics=Object.assign({},base.metrics||{},window.getFluencyExtendedMetrics?.()||analyze());
     metrics.transcriptRevision=revision(base);
-    if(base.id&&String(base.transcript||'')!==text)Object.assign(metrics,correctedMetrics(base,text));
+    if(base.id&&String(base.transcript||'')!==text){Object.assign(metrics,correctedMetrics(base,text));if(!base.transcript&&text&&window.getFluencyWordTimestamps?.().length){metrics.timingTranscriptMatches=true;delete metrics.transcriptCorrectedAt}}
     const focus=$('practiceFocus').textContent;if(focus)metrics.practiceFocus=focus;
     return Object.assign({},base,{id,createdAt:base.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),groupId:$('groupId').value||id,attempt:Number($('attemptNo').value)||1,title:$('title').value.trim()||'Untitled sample',context:$('context').value,audience:$('audience').value.trim(),duration,transcript:text,transcriptionStatus:base.source==='TELEGRAM'&&text?'COMPLETE':base.transcriptionStatus,timestampedTranscript:$('timestampedTranscript').value,metrics,wordTimestamps:window.getFluencyWordTimestamps?.()||[],reflection:$('reflection').value.trim(),tags:$('tags').value.trim(),audio:$('retainAudio').checked?(blob||base.audio||null):null});
   }

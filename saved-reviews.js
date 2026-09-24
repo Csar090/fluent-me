@@ -12,7 +12,7 @@
     if(active.has(row.id))throw Error('A review for this session is already running.');
     const jobId=crypto.randomUUID(),revision=Number(row.metrics?.transcriptRevision||1),transcript=row.transcript;active.set(row.id,jobId);
     try{
-      onStatus('Saving the session to Google…');await api.cloudSave(row);
+      onStatus('Confirming this transcript in Google…');await api.cloudSave(row,{forReview:true});
       const rubric=api.rubric();rubric.mode=row.context;rubric.analysisVersion='2.5';rubric.rubricVersion='communication-v2.5';rubric.perspective=lens;
       if(lens!=='all'){rubric.criteria=Object.fromEntries(Object.keys(lenses).filter(k=>!['all','custom'].includes(k)).map(k=>[k,k===lens]));rubric.custom=[rubric.custom,'Focus this review on '+(lenses[lens]||lens)+'.',custom].filter(Boolean).join('\n')}
       else if(custom)rubric.custom=[rubric.custom,custom].filter(Boolean).join('\n');

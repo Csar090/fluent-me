@@ -16,7 +16,31 @@
   async function post(payload,skipAuth){const c=saved(),url=endpoint();if(!url)throw Error('Permanent Google backend is not configured.');if(!skipAuth){if(!sessionValid(c))throw Error('Sign in with Google first.');Object.assign(payload,auth(c));}await fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload)})}
   function jsonp(action,params,timeout,skipAuth){return new Promise(function(resolve,reject){const c=saved(),url=endpoint();if(!url)return reject(Error('Permanent Google backend is not configured.'));const name='fluencyCb'+Date.now()+Math.random().toString(36).slice(2),script=document.createElement('script'),timer=setTimeout(()=>done(Error('Google backend timed out.')),timeout||25000);function done(err,data){clearTimeout(timer);delete window[name];script.remove();err?reject(err):resolve(data)}window[name]=data=>{if(!skipAuth&&data?.error==='UNAUTHORIZED'&&c.sessionToken===saved().sessionToken)lockSession('Your session expired or access was removed. Sign in again.');data&&data.ok===false?done(Error(data.error||'Google request failed')):done(null,data)};script.onerror=()=>done(Error('Could not reach Google backend.'));const q=new URLSearchParams(Object.assign({},params||{},skipAuth?{}:auth(c),{action:action,callback:name}));script.referrerPolicy='no-referrer';script.src=url+'?'+q.toString();document.head.appendChild(script)})}
   async function blobData(b){return new Promise(function(resolve,reject){const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(b)})}
-  async function cloudSave(row){setStatus('Saving session to Google…',true);const copy=Object.assign({},row,{audioDataUrl:row.audio&&!row.audioRetained?await blobData(row.audio):null});delete copy.audio;delete copy.aiReview;delete copy.aiStatus;await post({action:'save',session:copy});let confirmed;for(let attempt=0;attempt<4;attempt++){const check=await jsonp('list',{},45000);confirmed=(check.sessions||[]).find(x=>x.id===row.id&&x.transcript===row.transcript);if(confirmed)break;await new Promise(r=>setTimeout(r,1000));}if(!confirmed)throw Error('Google has not confirmed the saved session. Your local copy is retained; retry Sync history.');row.audioRetained=confirmed.audioRetained;await oldPut(row);setStatus('Session saved to Google. Transcript is permanent; retained audio follows the selected expiry.',true)}
+  const sameSavedTranscript=(remote,row)=>remote&&remote.id===row.id&&remote.transcript===row.transcript&&Number(remote.metrics?.transcriptRevision||1)===Number(row.metrics?.transcriptRevision||1);
+  async function cloudSave(row,options={}){
+    setStatus('Checking the saved transcript in Google…',true);
+    const check=async()=>{const result=await jsonp('list',{},45000);return(result.sessions||[]).find(s=>s.id===row.id)};
+    let confirmed=options.forReview?await check():null;
+    if(!sameSavedTranscript(confirmed,row)){
+      setStatus('Saving session to Google…',true);
+      const copy=Object.assign({},row,{audioDataUrl:row.audio&&!row.audioRetained?await blobData(row.audio):null});
+      delete copy.audio;delete copy.aiReview;delete copy.aiStatus;
+      const requestId=crypto.randomUUID();await post({action:'save',saveRequestId:requestId,session:copy});
+      const deadline=Date.now()+100000;
+      while(Date.now()<deadline){
+        await new Promise(r=>setTimeout(r,1500));
+        let receipt;
+        try{receipt=await jsonp('saveResult',{saveRequestId:requestId},15000)}catch(e){if(e.message!=='UNKNOWN_ACTION')throw e}
+        if(receipt?.status==='ERROR')throw Error(receipt.error||'Google rejected the session save.');
+        confirmed=await check();
+        if(sameSavedTranscript(confirmed,row))break;
+        if(receipt?.status==='DONE')throw Error('Google saved a different transcript revision. Sync history and reopen the sample.');
+      }
+      if(!sameSavedTranscript(confirmed,row))throw Error('Google has not confirmed this transcript yet. Your local copy is retained; wait a moment and retry the review.');
+    }
+    row.audioRetained=confirmed.audioRetained;await oldPut(row);
+    setStatus('Session confirmed in Google. Transcript is permanent; retained audio follows the selected expiry.',true);
+  }
 
   let expiryTimer=null,validating=null,lastValidated=0;
   function lockSession(message){window.FluencyAccess.lock(message);sessionStorage.removeItem('fluency-auth-v2');clearTimeout(expiryTimer);accountUI({})}
