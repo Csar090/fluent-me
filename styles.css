@@ -55,3 +55,6 @@ body>nav{top:0;z-index:30;max-width:none;justify-content:center;border-bottom:1p
 @media(max-width:1060px){.section-shortcuts{top:auto;bottom:0;left:0;right:0;width:100%;flex-direction:row;overflow-x:auto;background:var(--paper);padding:7px;box-shadow:0 -2px 8px #17233c12}.section-shortcuts button{flex:1;min-width:65px}main{padding-bottom:100px}}
 @media(max-width:560px){.progress-dimensions{grid-template-columns:repeat(2,minmax(0,1fr))}header{gap:8px}.header-actions{max-width:50%}.collapse-toolbar{align-items:flex-start}dialog{padding:12px}.dialog-toolbar{top:-12px}h2{overflow-wrap:anywhere}}
 .auth-locked main,.auth-locked nav,.auth-locked .header-actions{display:none!important} #loginGate{max-width:540px;margin:40px auto}html:not(.auth-locked) #loginGate{display:none}
+
+/* Pasted transcript ingestion */
+.capture-divider{display:flex;align-items:center;gap:10px;margin:12px 0;color:var(--muted);font-size:10px;font-weight:800}.capture-divider:before,.capture-divider:after{content:"";height:1px;background:var(--line);flex:1}.import-panel{margin:12px 0;padding:14px;border:1px solid var(--line);border-radius:12px;background:#f8fafb}.import-panel h3{margin:0 0 6px}.import-panel textarea{min-height:150px}
