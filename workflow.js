@@ -41,7 +41,7 @@
     if(saving)return null;if(recorder?.state==='recording')throw Error('Stop the recording before saving.');
     if(!blob&&!$('transcript').value.trim()){toast('Record audio or add a transcript.');return null;}
     saving=true;$('saveBtn').disabled=true;$('repeatBtn').disabled=true;
-    try{const row=await captureRow();await persist(row);loaded=row;$('groupId').value=row.groupId;$('captureSaveStatus').textContent=window.FluencyCloud.configured()?'Saved on this device and confirmed in Google.':'Saved on this device; Google sync is pending.';await render();$('repeatBtn').hidden=false;await compare(row.groupId);if(repeat)await nextAttempt(row);return row;}
+    try{const row=await captureRow();await persist(row);loaded=row;$('groupId').value=row.groupId;$('captureSaveStatus').textContent=window.FluencyCloud.configured()?'Saved on this device and confirmed in Google.':'Saved on this device; Google sync is pending.';await render();if(row.source==='TELEGRAM'&&row.transcript&&window.FluencyCloud.configured())document.dispatchEvent(new Event('fluency-cloud-synced'));$('repeatBtn').hidden=false;await compare(row.groupId);if(repeat)await nextAttempt(row);return row;}
     catch(e){$('captureSaveStatus').textContent='Save needs attention: '+e.message;toast(e.message);return null;}
     finally{saving=false;$('saveBtn').disabled=false;$('repeatBtn').disabled=false;}
   }
