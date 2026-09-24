@@ -6,13 +6,13 @@
   <meta name="referrer" content="no-referrer">
   <meta name="theme-color" content="#17233c">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="styles.css?v=20260924-1">
-  <link rel="stylesheet" href="fluency-v23.css?v=20260924-1">
+  <link rel="stylesheet" href="styles.css?v=20260924-2">
+  <link rel="stylesheet" href="fluency-v23.css?v=20260924-2">
   <title>Fluency OS</title>
 </head>
 <body>
 <header>
-  <div><small>PRIVATE • LOCAL-FIRST</small><span class="note" style="margin-left:12px">v2.7.1</span><h1>Fluency OS</h1></div>
+  <div><small>PRIVATE • LOCAL-FIRST</small><span class="note" style="margin-left:12px">v2.7.2</span><h1>Fluency OS</h1></div>
   <div class="header-actions"><span id="accountBadge" class="account-badge">Local mode</span><button id="exportBtn">Backup</button></div>
 </header>
 <section id="loginGate" class="card"><h2>Sign in to Fluency OS</h2><p>Use your approved Gmail account to access your recordings, transcripts and reviews.</p><div id="googleSignInButton" class="google-signin"></div><p id="loginStatus" class="note" role="status">Connecting to Google sign-in…</p></section>
@@ -76,7 +76,7 @@
   </section>
 
   <section id="library" class="tab">
-    <article class="card">
+    <article id="librarySearchSection" class="card">
       <h2>Saved samples</h2>
       <div class="grid"><label>Search<input id="librarySearch" placeholder="Title, mode, audience or tag"></label><label>Mode<select id="libraryContext"><option value="">All modes</option><option>Professional Update</option><option>Meeting Contribution</option><option>Executive Briefing</option><option>Explanation / Teaching</option><option>Persuasion / Recommendation</option><option>Conversation</option><option>Reflection / Thinking Aloud</option></select></label></div>
       <div id="samples"></div>
@@ -84,9 +84,9 @@
   </section>
 
   <section id="progress" class="tab">
-    <div class="stats"><div><b id="sampleCount">0</b><span>samples</span></div><div><b id="totalMinutes">0</b><span>minutes</span></div><div><b id="avgFillers">—</b><span>fillers / 100</span></div></div>
-    <article class="card"><h2>Communication progress</h2><p class="note">Your latest review of each current transcript, one point per attempt. Unreviewed dimensions stay blank. Scores reflect transcript evidence, not vocal delivery.</p><div id="dimensionProgress"></div><canvas id="chart" width="700" height="260" hidden></canvas></article>
-    <article class="card"><h2>Weekly summary</h2><div id="weeklySummary" class="review-grid"></div></article>
+    <div id="progressSummarySection" class="stats"><div><b id="sampleCount">0</b><span>samples</span></div><div><b id="totalMinutes">0</b><span>minutes</span></div><div><b id="avgFillers">—</b><span>fillers / 100</span></div></div>
+    <article id="progressDimensionsSection" class="card"><h2>Communication progress</h2><p class="note">Your latest review of each current transcript, one point per attempt. Unreviewed dimensions stay blank. Scores reflect transcript evidence, not vocal delivery.</p><div id="dimensionProgress"></div><canvas id="chart" width="700" height="260" hidden></canvas></article>
+    <article id="progressWeeklySection" class="card"><h2>Weekly summary</h2><div id="weeklySummary" class="review-grid"></div></article>
   </section>
 
   <section id="settings" class="tab">
@@ -98,12 +98,12 @@
       <label class="check"><input id="liveTranscript" type="checkbox" checked> Try live browser transcription</label>
       <label class="check"><input id="localTranscript" type="checkbox" checked> Use private on-device transcription and timestamps</label>
       <p class="note">The first on-device transcription downloads a small language model. Later sessions reuse the cache.</p>
-      <h3>Google account & cloud</h3>
+      <h3 id="settingsAccountSection">Google account & cloud</h3>
       <p class="note">Sign in once with your approved Gmail account. Fluency OS will reconnect the linked database and Drive automatically on this device.</p>
 
       <div id="signedInPanel" class="signed-in-panel" hidden><b id="signedInEmail"></b><button id="signOutBtn" type="button">Sign out</button></div>
       <div class="grid"><label>Audio retention<select id="retentionDays"><option value="7">7 days</option><option value="15">15 days</option></select></label><label>Gemini model<select id="geminiModel"><option value="gemini-3.5-flash-lite">Gemini 3.5 Flash-Lite (recommended)</option><option value="gemini-3.1-flash-lite">Gemini 3.1 Flash-Lite</option></select></label></div>
-      <fieldset><legend>Communication coaching criteria</legend>
+      <fieldset id="settingsCoachingSection"><legend>Communication coaching criteria</legend>
         <label class="check"><input class="criterion" type="checkbox" value="structure" checked> Structure</label>
         <label class="check"><input class="criterion" type="checkbox" value="coherence" checked> Coherence</label>
         <label class="check"><input class="criterion" type="checkbox" value="clarity" checked> Clarity</label>
@@ -119,7 +119,7 @@
       <label>Custom coaching instruction<textarea id="aiCustom" rows="3" placeholder="Example: Focus on conclusion-first communication for senior stakeholders."></textarea></label>
       <div class="button-row"><button id="saveCloudBtn">Save configuration</button><button id="testCloudBtn">Test connection</button><button id="syncCloudBtn">Sync history</button></div>
       <p id="cloudStatus" class="note">Cloud backend is not configured. Local recording remains available.</p>
-      <h3>Backup & restore</h3>
+      <h3 id="settingsBackupSection">Backup & restore</h3>
       <p class="note">Backup includes session data and retained audio. Store the downloaded file in Google Drive if you want an off-device copy.</p>
       <div class="button-row"><button id="fullBackupBtn">Download full backup</button><button id="restoreBtn">Restore backup</button></div>
       <input id="restoreInput" type="file" accept=".json,application/json" hidden>
@@ -127,18 +127,18 @@
     </article>
   </section>
 </main>
-<aside id="captureShortcuts" class="section-shortcuts" aria-label="Quick section navigation"><button data-jump="currentFocusCard">Focus</button><button data-jump="telegramInboxCard">Telegram</button><button data-jump="recorderSection">Record</button><button data-jump="transcriptSection">Transcript</button><button data-jump="timestampSegments">Timestamps</button><button data-jump="reviewPanel">Review</button><button data-jump="comparePanel">Compare</button></aside>
+<aside id="captureShortcuts" class="section-shortcuts" aria-label="Quick section navigation"><button data-shortcut-tab="capture" data-jump="currentFocusCard">Focus</button><button data-shortcut-tab="capture" data-jump="telegramInboxBody">Telegram</button><button data-shortcut-tab="capture" data-jump="recorderSection">Record</button><button data-shortcut-tab="capture" data-jump="transcriptBody">Transcript</button><button data-shortcut-tab="capture" data-jump="timestampSegments">Timestamps</button><button data-shortcut-tab="capture" data-jump="reviewPanel">Review</button><button data-shortcut-tab="capture" data-jump="comparePanel">Compare</button><button data-shortcut-tab="library" data-jump="librarySearchSection" hidden>Search</button><button data-shortcut-tab="library" data-jump="samples" hidden>Samples</button><button data-shortcut-tab="progress" data-jump="progressSummarySection" hidden>Summary</button><button data-shortcut-tab="progress" data-jump="progressDimensionsSection" hidden>Dimensions</button><button data-shortcut-tab="progress" data-jump="progressWeeklySection" hidden>Weekly</button><button data-shortcut-tab="settings" data-jump="settings" hidden>Privacy</button><button data-shortcut-tab="settings" data-jump="settingsAccountSection" hidden>Account</button><button data-shortcut-tab="settings" data-jump="settingsCoachingSection" hidden>Coaching</button><button data-shortcut-tab="settings" data-jump="settingsBackupSection" hidden>Backup</button></aside>
 <dialog id="sessionDialog"><button id="closeDialog" class="dialog-close">Close</button><div id="sessionDetail"></div></dialog>
 <div id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=20260924-1"></script>
-<script src="app.js?v=20260924-1"></script>
-<script src="secure-storage.js?v=20260924-1"></script>
-<script src="enhancements.js?v=20260924-1"></script>
-<script src="cloud.js?v=20260924-1"></script>
-<script src="fluency-v23.js?v=20260924-1"></script>
-<script src="saved-reviews.js?v=20260924-1"></script>
-<script src="progress.js?v=20260924-1"></script>
-<script src="workflow.js?v=20260924-1"></script>
+<script src="config.js?v=20260924-2"></script>
+<script src="app.js?v=20260924-2"></script>
+<script src="secure-storage.js?v=20260924-2"></script>
+<script src="enhancements.js?v=20260924-2"></script>
+<script src="cloud.js?v=20260924-2"></script>
+<script src="fluency-v23.js?v=20260924-2"></script>
+<script src="saved-reviews.js?v=20260924-2"></script>
+<script src="progress.js?v=20260924-2"></script>
+<script src="workflow.js?v=20260924-2"></script>
 </body>
 </html>

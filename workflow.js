@@ -2,19 +2,19 @@
 (function(){
   let saving=false,loaded=null;
   const revision=row=>Number(row?.metrics?.transcriptRevision||1);
-  function collapse(box,title,key,buttonId){
+  function collapse(box,title,key,buttonId,existingButton){
     if(!box||box.dataset.collapseMounted)return;
     box.dataset.collapseMounted='1';
-    const bar=document.createElement('div');bar.className='collapse-toolbar';
-    const heading=document.createElement('h3');heading.textContent=title;
-    const button=document.createElement('button');button.type='button';button.id=buttonId||box.id+'Toggle';button.setAttribute('aria-controls',box.id);
-    bar.append(heading,button);box.before(bar);
+    let button=existingButton;
+    if(!button){const bar=document.createElement('div');bar.className='collapse-toolbar';const heading=document.createElement('h3');heading.textContent=title;button=document.createElement('button');button.type='button';bar.append(heading,button);box.before(bar)}
+    button.id=buttonId||button.id||box.id+'Toggle';button.setAttribute('aria-controls',box.id);
     let folded=localStorage.getItem('fluency-collapse-'+key)==='1';
     const apply=()=>{box.hidden=folded;button.textContent=folded?'Expand':'Minimize';button.setAttribute('aria-expanded',String(!folded));button.setAttribute('aria-label',(folded?'Expand ':'Minimize ')+title)};
     button.onclick=()=>{folded=!folded;localStorage.setItem('fluency-collapse-'+key,folded?'1':'0');apply()};apply();
   }
-  function jump(id){const el=$(id);if(!el)return;for(let p=el;p&&p!==document.body;p=p.parentElement){if(p.dataset.collapseMounted&&p.hidden)$(p.id+'Toggle')?.click()}el.scrollIntoView?.({behavior:'smooth',block:'start'});}
-  function tab(name){if($('sessionDialog').open)$('sessionDialog').close();document.querySelectorAll('body>nav [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('main>.tab').forEach(x=>x.classList.toggle('active',x.id===name));$('captureShortcuts').hidden=name!=='capture';jump(name);}
+  function jump(id){const el=$(id);if(!el)return;for(let p=el;p&&p!==document.body;p=p.parentElement){if(p.dataset.collapseMounted&&p.hidden)document.querySelector('[aria-controls="'+p.id+'"]')?.click()}if(el.hidden&&!el.dataset.collapseMounted)return;el.scrollIntoView?.({behavior:'smooth',block:'start'});}
+  function refreshShortcuts(){const active=document.querySelector('main>.tab.active')?.id;document.querySelectorAll('[data-shortcut-tab]').forEach(b=>{const target=$(b.dataset.jump);b.hidden=b.dataset.shortcutTab!==active||!target||Boolean(target.hidden&&!target.dataset.collapseMounted)})}
+  function tab(name){if($('sessionDialog').open)$('sessionDialog').close();document.querySelectorAll('body>nav [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('main>.tab').forEach(x=>x.classList.toggle('active',x.id===name));refreshShortcuts();jump(name);}
   function correctedMetrics(row,text){
     const m=Object.assign({},row.metrics||{}),changed=text!==String(row.transcript||'');
     const words=text.match(/[a-z0-9\u2019']+/gi)||[];let fillers=0;
@@ -91,6 +91,7 @@
     const count=document.createElement('span');count.id='timestampSummary';count.className='note';$('timestampSegments').previousElementSibling.querySelector('h3').append(document.createElement('br'),count);
     document.querySelectorAll('body>nav [data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
     document.querySelectorAll('[data-jump]').forEach(b=>b.onclick=()=>jump(b.dataset.jump));
+    new MutationObserver(refreshShortcuts).observe($('reviewPanel'),{attributes:true,attributeFilter:['hidden']});new MutationObserver(refreshShortcuts).observe($('comparePanel'),{attributes:true,attributeFilter:['hidden']});refreshShortcuts();
     $('saveCorrectionsBtn').onclick=()=>saveCapture();$('practiceBtn').onclick=()=>nextAttempt();
     $('repeatBtn').onclick=()=>saveCapture(true);$('saveBtn').onclick=()=>saveCapture();
     $('recordBtn').onclick=async()=>{if(recorder?.state==='recording')return toggle();const saved=(await all()).find(x=>x.id===$('sessionId').value);if(saved){const row=await saveCapture();if(!row)return;await nextAttempt(row);}return toggle();};
@@ -98,5 +99,5 @@
     $('transcript').addEventListener('input',()=>{$('captureSaveStatus').textContent='Transcript changed. Save corrections before leaving.'});
   }
   document.addEventListener('DOMContentLoaded',mount);
-  window.FluencyWorkflow={collapse,jump,tab,revision,correctedMetrics,captureRow,saveCapture,nextAttempt,edit,compare};
+  window.FluencyWorkflow={collapse,jump,tab,refreshShortcuts,revision,correctedMetrics,captureRow,saveCapture,nextAttempt,edit,compare};
 })();
