@@ -22,7 +22,7 @@ function setup() {
   return {spreadsheetUrl:ss.getUrl(),audioFolderUrl:folder.getUrl(),next:'Add GEMINI_API_KEY in Project Settings → Script properties, then deploy as a web app.'};
 }
 function doGet(e){const p=e&&e.parameter||{};try{if(p.action==='bootstrap')return jsonp_(bootstrap_(),p.callback);if(p.action==='signinResult')return jsonp_(signinResult_(p.nonce),p.callback);if(!authorizedRequest_(p))return jsonp_({ok:false,error:'UNAUTHORIZED'},p.callback);if(p.action==='session')return jsonp_(sessionDetails_(p),p.callback);if(p.action==='health')return jsonp_(health_(),p.callback);if(p.action==='list')return jsonp_({ok:true,sessions:listSessions_()},p.callback);if(p.action==='job')return jsonp_(getJob_(p.jobId),p.callback);if(p.action==='saveResult')return jsonp_(saveResult_(p.saveRequestId),p.callback);if(p.action==='telegramStatus')return jsonp_(telegramStatus_(),p.callback);if(p.action==='telegramPending')return jsonp_({ok:true,sessions:listTelegramPending_()},p.callback);if(p.action==='audio')return jsonp_(getAudioPayload_(p.sessionId),p.callback);return jsonp_({ok:false,error:'UNKNOWN_ACTION'},p.callback)}catch(err){return jsonp_({ok:false,error:String(err&&err.message||err)},p.callback)}}
-function doPost(e){try{const body=JSON.parse(e.postData&&e.postData.contents||'{}');if(isTelegramWebhook_(e,body))return json_(handleTelegramUpdate_(body));if(body.action==='signin')return json_(signin_(body));if(!authorizedRequest_(body))return json_({ok:false,error:'UNAUTHORIZED'});if(body.action==='signout'){revokeSession_(body.sessionToken);return json_({ok:true})}if(body.action==='restoreTelegram')return json_(restoreTelegramJob_(body));if(body.action==='save')return json_(saveWithReceipt_(body));if(body.action==='analyze')return json_(analyzeJob_(body));if(body.action==='config')return json_(setConfig_(body));if(body.action==='saveWords')return json_(saveWordTimestamps_(body.sessionId,body.words||[]));return json_({ok:false,error:'UNKNOWN_ACTION'})}catch(err){return json_({ok:false,error:String(err&&err.message||err)})}}
+function doPost(e){try{const body=JSON.parse(e.postData&&e.postData.contents||'{}');if(isTelegramWebhook_(e,body))return json_(handleTelegramUpdate_(body));if(body.action==='signin')return json_(signin_(body));if(!authorizedRequest_(body))return json_({ok:false,error:'UNAUTHORIZED'});if(body.action==='signout'){revokeSession_(body.sessionToken);return json_({ok:true})}if(body.action==='restoreTelegram')return json_(restoreTelegramJob_(body));if(body.action==='telegramSync')return json_(Telegram_manualSync());if(body.action==='save')return json_(saveWithReceipt_(body));if(body.action==='analyze')return json_(analyzeJob_(body));if(body.action==='config')return json_(setConfig_(body));if(body.action==='saveWords')return json_(saveWordTimestamps_(body.sessionId,body.words||[]));return json_({ok:false,error:'UNKNOWN_ACTION'})}catch(err){return json_({ok:false,error:String(err&&err.message||err)})}}
 function saveWithReceipt_(body){const id=String(body.saveRequestId||'');if(id&&!/^[a-zA-Z0-9-]{16,80}$/.test(id))throw new Error('Invalid save request ID.');try{const result=saveSession_(body.session);if(id)CacheService.getScriptCache().put('save-'+id,JSON.stringify({ok:true,status:'DONE',sessionId:result.id}),600);return result}catch(err){if(id)CacheService.getScriptCache().put('save-'+id,JSON.stringify({ok:true,status:'ERROR',error:String(err&&err.message||err)}),600);throw err}}
 function saveResult_(id){if(!/^[a-zA-Z0-9-]{16,80}$/.test(String(id||'')))return{ok:false,error:'Invalid save request ID.'};return parse_(CacheService.getScriptCache().get('save-'+id),{ok:true,status:'PENDING'})}
 function saveSession_(s){const lock=LockService.getScriptLock();lock.waitLock(30000);try{return saveSessionUnlocked_(s)}finally{lock.releaseLock()}}
@@ -144,8 +144,8 @@ function Telegram_configureWorker(){const p=PropertiesService.getScriptPropertie
 function telegramStatus_(){
   const p=PropertiesService.getScriptProperties(),response=telegramApi_('getWebhookInfo',{});if(!response.ok)throw new Error('Telegram rejected the webhook check.');
   const info=response.result||{},rows=listSessions_().filter(s=>s.source==='TELEGRAM').sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-  const polling=p.getProperty('TELEGRAM_DELIVERY_MODE')==='POLLING';
-  return{ok:true,backendVersion:'20260923-3',deliveryMode:polling?'POLLING':'WEBHOOK',webhookMatches:polling?!info.url:String(info.url||'').replace(/\/$/,'')===String(p.getProperty('TELEGRAM_WORKER_URL')||'https://fluent-me.sarveshton.workers.dev/').replace(/\/$/,''),pendingUpdates:Number(info.pending_update_count||0),lastError:polling?p.getProperty('TELEGRAM_POLL_ERROR')||'':info.last_error_message||'',lastErrorAt:!polling&&info.last_error_date?new Date(info.last_error_date*1000).toISOString():'',lastCheckedAt:p.getProperty('TELEGRAM_LAST_POLL')||'',lastReceivedAt:p.getProperty('TELEGRAM_LAST_IMPORT')||rows[0]&&rows[0].createdAt||'',failedImports:rows.filter(r=>r.transcriptionStatus==='INGESTION_ERROR').length};
+  const mode=p.getProperty('TELEGRAM_DELIVERY_MODE')||'WEBHOOK',polling=mode==='POLLING'||mode==='MANUAL';
+  return{ok:true,backendVersion:'20260924-4',deliveryMode:mode==='MANUAL'?'MANUAL':(polling?'POLLING':'WEBHOOK'),webhookMatches:polling?!info.url:String(info.url||'').replace(/\/$/,'')===String(p.getProperty('TELEGRAM_WORKER_URL')||'https://fluent-me.sarveshton.workers.dev/').replace(/\/$/,''),pendingUpdates:Number(info.pending_update_count||0),lastError:polling?p.getProperty('TELEGRAM_POLL_ERROR')||'':info.last_error_message||'',lastErrorAt:!polling&&info.last_error_date?new Date(info.last_error_date*1000).toISOString():'',lastCheckedAt:p.getProperty('TELEGRAM_LAST_POLL')||'',lastReceivedAt:p.getProperty('TELEGRAM_LAST_IMPORT')||rows[0]&&rows[0].createdAt||'',failedImports:rows.filter(r=>r.transcriptionStatus==='INGESTION_ERROR').length};
 }
 
 // The durable inbox does not depend on redirects through a third-party relay.
@@ -153,13 +153,19 @@ function Telegram_enablePolling(){
   const props=PropertiesService.getScriptProperties();
   if(!props.getProperty('TELEGRAM_BOT_TOKEN')||!props.getProperty('TELEGRAM_CHAT_ID'))throw new Error('Telegram bot and approved chat must be configured.');
   const result=telegramApi_('deleteWebhook',{drop_pending_updates:false});if(!result.ok)throw new Error('Could not disconnect the old webhook.');
-  props.setProperty('TELEGRAM_DELIVERY_MODE','POLLING');
+  props.setProperty('TELEGRAM_DELIVERY_MODE','MANUAL');
   ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='Telegram_poll').forEach(t=>ScriptApp.deleteTrigger(t));
-  ScriptApp.newTrigger('Telegram_poll').timeBased().everyMinutes(1).create();
-  Telegram_poll();console.log(JSON.stringify(telegramStatus_(),null,2));
+  console.log(JSON.stringify(telegramStatus_(),null,2));
+}
+function Telegram_manualSync(){
+  const props=PropertiesService.getScriptProperties();
+  props.setProperty('TELEGRAM_DELIVERY_MODE','MANUAL');
+  ScriptApp.getProjectTriggers().filter(t=>t.getHandlerFunction()==='Telegram_poll').forEach(t=>ScriptApp.deleteTrigger(t));
+  Telegram_poll();
+  return telegramStatus_();
 }
 function Telegram_poll(){
-  const props=PropertiesService.getScriptProperties();if(props.getProperty('TELEGRAM_DELIVERY_MODE')!=='POLLING')return;
+  const props=PropertiesService.getScriptProperties(),mode=props.getProperty('TELEGRAM_DELIVERY_MODE');if(mode!=='POLLING'&&mode!=='MANUAL')return;
   const lock=LockService.getUserLock();if(!lock.tryLock(1000))return;
   try{
     const response=telegramApi_('getUpdates',{offset:Number(props.getProperty('TELEGRAM_UPDATE_OFFSET')||0),limit:20,timeout:0,allowed_updates:['message']});
