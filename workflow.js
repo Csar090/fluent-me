@@ -30,6 +30,7 @@
     const metrics=Object.assign({},base.metrics||{},window.getFluencyExtendedMetrics?.()||analyze());
     metrics.transcriptRevision=revision(base);
     if(base.id&&String(base.transcript||'')!==text){Object.assign(metrics,correctedMetrics(base,text));if(!base.transcript&&text&&window.getFluencyWordTimestamps?.().length){metrics.timingTranscriptMatches=true;delete metrics.transcriptCorrectedAt}}
+    const practice=window.FluencyPractice?.snapshot();if(practice)metrics.learningPractice=practice;else delete metrics.learningPractice;
     const focus=$('practiceFocus').textContent;if(focus)metrics.practiceFocus=focus;
     return Object.assign({},base,{id,createdAt:base.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),groupId:$('groupId').value||id,attempt:Number($('attemptNo').value)||1,title:$('title').value.trim()||'Untitled sample',context:$('context').value,audience:$('audience').value.trim(),duration,transcript:text,transcriptionStatus:base.source==='TELEGRAM'&&text?'COMPLETE':base.transcriptionStatus,timestampedTranscript:$('timestampedTranscript').value,metrics,wordTimestamps:window.getFluencyWordTimestamps?.()||[],reflection:$('reflection').value.trim(),tags:$('tags').value.trim(),audio:$('retainAudio').checked?(blob||base.audio||null):null});
   }
@@ -73,6 +74,7 @@
     reset();loaded=row;window.FluencyImport?.restore(row);window.FluencyV23.wordTimestamps=(row.wordTimestamps||[]).slice();window.FluencyV23.activeTelegram=row.source==='TELEGRAM'?row:null;
     ['title','context','audience','reflection','tags','transcript','timestampedTranscript'].forEach(k=>$(k).value=row[k]||'');
     $('sessionId').value=row.id;$('groupId').value=row.groupId||row.id;$('attemptNo').value=row.attempt||1;$('attemptBadge').textContent='Attempt '+(row.attempt||1);
+    window.FluencyPractice?.restore(row);
     duration=Number(row.duration)||0;blob=row.audio||null;$('timer').textContent=time(duration);$('playback').hidden=!blob;
     if(blob)$('playback').src=URL.createObjectURL(blob);
     $('redoTranscriptBtn').hidden=!blob;$('practiceFocus').textContent=row.metrics?.practiceFocus||'';$('practiceFocus').hidden=!$('practiceFocus').textContent;

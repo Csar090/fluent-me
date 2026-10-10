@@ -1,0 +1,72 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const {app}=require('./regression.cjs');const root=path.join(__dirname,'..');
+function backend(remote=[]){
+  const sheets=new Map();let locked=false;
+  class Sheet{
+    constructor(){this.rows=[]}
+    getLastRow(){return this.rows.length}getLastColumn(){return this.rows[0]?.length||0}
+    appendRow(row){this.rows.push([...row])}
+    getRange(row,col,count=1,width=1){return{getValues:()=>Array.from({length:count},(_,i)=>Array.from({length:width},(_,j)=>this.rows[row+i-1]?.[col+j-1]??'')),getValue:()=>this.rows[row-1]?.[col-1]??'',setValues:values=>values.forEach((v,i)=>v.forEach((x,j)=>{this.rows[row+i-1]??=[];this.rows[row+i-1][col+j-1]=x}))}}
+  }
+  const ss={getSheetByName:n=>sheets.get(n)||null,insertSheet:n=>{const s=new Sheet();sheets.set(n,s);return s}};
+  const b=vm.createContext({console,SpreadsheetApp:{openById:()=>ss},PropertiesService:{getScriptProperties:()=>({getProperty:()=> 'fixture'})},LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false,'no nested lock');locked=true},releaseLock(){locked=false}})}});
+  for(const file of ['Code.gs','LearningRegistry.gs','LearningEvidence.gs','LearningAssessment.gs'])vm.runInContext(fs.readFileSync(path.join(root,'backend',file),'utf8'),b,{filename:file});
+  b.listSessions_=()=>remote;b.sheet_=n=>{if(!sheets.has(n)){const s=new Sheet();s.appendRow(['jobId','createdAt','status','result','error']);sheets.set(n,s)}return sheets.get(n)};
+  b.findRow_=(s,id)=>s.rows.findIndex(row=>row[0]===id)+1;
+  b.callLearningModel_=e=>{assert.equal(locked,false,'network/model runs outside lock');return good(e)};
+  b.jsonp_=x=>x;b.json_=x=>x;b.authorizedRequest_=()=>true;b.isTelegramWebhook_=()=>false;
+  return{b,sheets,remote};
+}
+function good(e){
+  const competency=e.practice?JSON.parse(fs.readFileSync(path.join(root,'backend/LearningRegistry.gs'),'utf8').split('const LEARNING_REGISTRY = ')[1].split(';\nfunction')[0]).exercises.find(x=>x.id===e.practice.exerciseId).competencyId:null;
+  return{status:'SUPPORTED',summary:'The opening states a clear claim.',strengths:[{quote:e.transcript,start:0,end:e.transcript.length,reason:'The claim is explicit.'}],observations:[],competencyEvidence:(competency?[competency]:['communication.point','communication.structure','communication.concision']).map(id=>({competencyId:id,status:'SUPPORTED',reason:'The stated point is observable in this sample.'})),selfAssessmentComparison:'Your reported intent is consistent with the opening claim; broader skill is unverified.',intervention:null,modelUsed:'fixture'};
+}
+function record(id='sample'){return{id,groupId:id,attempt:1,title:'Fixture',context:'Conversation',transcript:'The point is to focus on one useful next step.',metrics:{transcriptRevision:1},aiReview:{summary:'Existing legacy review',scores:{structure:72}},duration:20}}
+function practice(registry,e){return{taskId:'task-id-1234567890',exerciseId:e.id,exerciseVersion:e.version,registryVersion:registry.version,rubricVersion:e.rubricVersion,prompt:e.prompts[0],assistance:'independent',preparationElapsedSeconds:5,parentSessionId:'',interventionId:''}}
+(async()=>{
+  let {b,sheets,remote}=backend();const registry=b.learningRegistry_().registry;assert.equal(registry.exercises.length,5);assert.equal(registry.competencies.length,27);assert.equal(b.validateLearningRegistry_(),true);
+  const originalDependencies=registry.competencies[0].dependencies;registry.competencies[0].dependencies=[registry.competencies[0].id];assert.throws(()=>b.validateLearningRegistry_(),/Cyclic/);registry.competencies[0].dependencies=originalDependencies;
+  registry.exercises[0].operationId='bad';assert.throws(()=>b.validateLearningRegistry_(),/Unknown/);registry.exercises[0].operationId='select';
+  b.Learning_setup();b.Learning_setup();assert.equal(sheets.size,2);assert.equal(sheets.get('Learning Evidence').rows.length,1);const before=JSON.stringify(sheets.get('Learning Evidence').rows);sheets.get('Learning Evidence').rows[0][0]='Wrong';assert.throws(()=>b.Learning_setup(),/incompatible/);assert.equal(sheets.get('Learning Evidence').rows[0][0],'Wrong');sheets.get('Learning Evidence').rows=JSON.parse(before);
+  console.log('PASS L01: registry IDs/references/cycles and repeatable non-destructive learning setup');
+  b.authorizedRequest_=()=>false;assert.equal(b.doGet({parameter:{action:'learningRegistry'}}).error,'UNAUTHORIZED');assert.equal(b.doPost({postData:{contents:JSON.stringify({action:'learningAssess'})}}).error,'UNAUTHORIZED');b.authorizedRequest_=()=>true;
+  console.log('PASS L02: new learning routes retain the existing authorization boundary');
+  const row=record();remote.push(row);let evidence=b.learningSnapshot_(row,{selfAssessment:'My main point is to choose one step.'}),raw=good(evidence);
+  assert.equal(b.validateLearningAssessment_(raw,evidence).mastery,'NOT_DETERMINED');const bad=JSON.parse(JSON.stringify(raw));bad.strengths[0].quote='Invented quote';assert.throws(()=>b.validateLearningAssessment_(bad,evidence),/validation/);
+  bad.strengths[0]={...raw.strengths[0]};bad.competencyEvidence[0].status='MASTERED';assert.throws(()=>b.validateLearningAssessment_(bad,evidence),/validation/);
+  const obs={errorId:'delayed-point',quote:row.transcript,start:0,end:row.transcript.length,interpretation:'Point appeared late.',hypothesis:'May be discovering a point while speaking.',confidence:'medium',uncertainty:'Could instead be deliberate context setting.'};raw.observations=[obs];raw.intervention={errorId:'delayed-point',reason:'Target one observable pattern.'};const valid=b.validateLearningAssessment_(raw,evidence);assert.equal(valid.intervention.instruction,registry.errors.find(x=>x.id==='delayed-point').intervention);raw.observations[0].confidence='certain';assert.throws(()=>b.validateLearningAssessment_(raw,evidence),/validation/);raw.observations[0].confidence='medium';raw.observations[0].uncertainty='';assert.throws(()=>b.validateLearningAssessment_(raw,evidence),/validation/);
+  const insufficient={...good(evidence),status:'INSUFFICIENT_EVIDENCE',strengths:[],competencyEvidence:good(evidence).competencyEvidence.map(x=>({...x,status:'INSUFFICIENT_EVIDENCE'}))};assert.equal(b.validateLearningAssessment_(insufficient,evidence).intervention,null);
+  console.log('PASS L03: exact quote spans, uncertainty, supported IDs and insufficient evidence schema');
+  const job='learning-job-1234567890',body={jobId:job,sessionId:row.id,transcript:row.transcript,transcriptRevision:1,selfAssessment:'Choose one next step.'};const legacy=JSON.stringify(row.aiReview);let calls=0;b.callLearningModel_=e=>{calls++;return good(e)};
+  b.learningAssessJob_(body);b.learningAssessJob_(body);assert.equal(calls,1);assert.equal(b.getJob_(job).status,'DONE');assert.equal(JSON.stringify(row.aiReview),legacy);assert.equal(b.learningHistory_(row.id).entries.length,1);
+  b.learningAssessJob_({...body,jobId:'learning-conflict-123456',transcript:'Wrong'});assert.equal(b.getJob_('learning-conflict-123456').status,'ERROR');assert.match(b.getJob_('learning-conflict-123456').error,/changed/);
+  b.callLearningModel_=e=>{row.transcript='Corrected current point.';row.metrics.transcriptRevision=2;return good(e)};b.learningAssessJob_({...body,jobId:'learning-race-1234567890'});assert.equal(b.getJob_('learning-race-1234567890').result.currentAtPublication,false);assert.equal(b.learningHistory_(row.id).entries.every(x=>!x.current),true);
+  const existingCount=sheets.get('Learning Assessments').rows.length;b.callLearningModel_=e=>({...good(e),strengths:[{quote:'invented',start:0,end:8,reason:'wrong'}]});b.learningAssessJob_({...body,jobId:'learning-invalid-123456',transcript:row.transcript,transcriptRevision:2});assert.equal(b.getJob_('learning-invalid-123456').status,'ERROR');assert.equal(sheets.get('Learning Assessments').rows.length,existingCount);assert.equal(JSON.stringify(row.aiReview),legacy);
+  console.log('PASS L04: job deduplication, revision conflict/race, immutable history and legacy-review preservation on success/failure');
+  for(const e of registry.exercises){row.metrics.learningPractice=practice(registry,e);const snap=b.learningSnapshot_(row,{});assert.equal(snap.practice.maxWords,e.maxWords);assert.equal(snap.practice.prompt,e.prompts[0]);assert.equal(snap.assistance,'independent');assert.equal(snap.evidenceQuality,'TRANSCRIPT_ONLY')}
+  row.metrics.learningPractice.exerciseVersion=999;assert.throws(()=>b.learningSnapshot_(row,{}),/incompatible/);delete row.metrics.learningPractice;row.transcript='x'.repeat(20001);assert.throws(()=>b.learningSnapshot_(row,{}),/20,000/);
+  console.log('PASS L05: five versioned exercise snapshots, assistance/constraints provenance and non-truncating size rejection');
+  const special=record('=special-id');special.groupId='=special-group';special.transcript='=formula-like text\n🙂 नमस्ते <script>unsafe()</script>';remote.push(special);b.callLearningModel_=e=>good(e);b.learningAssessJob_({jobId:'learning-unicode-123456',sessionId:special.id,transcript:special.transcript,transcriptRevision:1});const specialEntry=b.learningHistory_(special.id).entries[0];assert.equal(specialEntry.evidence.transcript,special.transcript);const storedSpecial=sheets.get('Learning Evidence').rows.at(-1);assert.equal(storedSpecial[2][0],'"');assert.equal(storedSpecial[5][0],'"');assert.equal(specialEntry.evidence.groupId,special.groupId);
+  console.log('PASS L07: exact Unicode/newline evidence and formula-like strings are JSON encoded, never truncated');
+  for(const multilingual of [false,true]){
+    const remoteRows=[],env=backend(remoteRows);env.b.callLearningModel_=evidence=>{const r=good(evidence);if(evidence.transcript.startsWith('My point')){const ex=env.b.learningRegistry_().registry.exercises.find(x=>x.id===evidence.practice.exerciseId),id=ex.errorIds.find(x=>x!=='premature-speaking');r.observations=[{errorId:id,quote:evidence.transcript,start:0,end:evidence.transcript.length,interpretation:'Fixture observable pattern.',hypothesis:'A possible structuring mechanism.',confidence:'low',uncertainty:'An alternative explanation remains possible.'}];r.intervention={errorId:id,reason:'One target for this fixture.'};}return r;};const a=await app(remoteRows,true,{learningBackend:env.b,multilingual});
+    try{
+      const w=a.w,d=w.document;assert.equal(d.querySelectorAll('#cognitivePracticeCard').length,1);
+      await d.getElementById('loadPractice').onclick();assert.equal(d.getElementById('practiceExercise').options.length,5);
+      for(const e of env.b.learningRegistry_().registry.exercises){
+        await w.FluencyPractice.start(e.id,'independent');assert.equal(w.FluencyPractice.snapshot().exerciseId,e.id);assert.match(d.getElementById('practiceHint').textContent,/no structure hint/);w.FluencyPractice.ready();w.FluencyImport.startRecording();assert.equal(w.FluencyPractice.snapshot().exerciseId,e.id,'recording provenance reset must preserve the exercise');
+        d.getElementById('transcript').value='My point is to choose one clear next step.';d.getElementById('practiceSelf').value='I stated one point, with limited support.';
+        const saved=await w.FluencyWorkflow.saveCapture();assert.ok(e.prompts.includes(saved.metrics.learningPractice.prompt));assert.equal(saved.metrics.learningPractice.selfAssessment,'I stated one point, with limited support.');
+        const result=await w.FluencyLearning.assess(saved,d.getElementById('practiceSelf').value);assert.equal(result.mastery,'NOT_DETERMINED');const history=await w.FluencyLearning.history(saved);assert.equal(history.length,1);
+        w.FluencyReviews.open(saved);await d.querySelector('.learning-load').onclick();assert.equal(d.querySelector('.learning-retry').disabled,false);assert.match(d.querySelector('.learning-results').textContent,/One retry target/);const prior=JSON.stringify(saved);await d.querySelector('.learning-retry').onclick();assert.notEqual(d.getElementById('sessionId').value,saved.id);assert.equal(w.FluencyPractice.snapshot().parentSessionId,saved.id);assert.equal(w.FluencyPractice.snapshot().prompt,saved.metrics.learningPractice.prompt);assert.equal(JSON.stringify(saved),prior);
+        d.getElementById('transcript').value='Choose one next step, because focus helps us finish.';const retry=await w.FluencyWorkflow.saveCapture();await w.FluencyLearning.assess(retry,'I kept the point first.');const linked=await w.FluencyLearning.history(retry);assert.equal(linked.length,2);assert.match(w.FluencyLearning.compare(linked,retry),/Linked retry comparison/);assert.match(w.FluencyLearning.compare(linked,retry),/not flagged/);
+        await w.FluencyWorkflow.edit(saved);assert.equal(w.FluencyPractice.snapshot().taskId,saved.metrics.learningPractice.taskId);d.getElementById('transcript').value='Corrected text for this task.';d.getElementById('practiceSelf').value='Updated self assessment.';const corrected=await w.FluencyWorkflow.saveCapture();assert.equal(corrected.metrics.transcriptRevision,2);assert.equal(corrected.metrics.learningPractice.selfAssessment,'Updated self assessment.');assert.equal((await w.FluencyLearning.history(corrected)).find(x=>x.evidence.sessionId===saved.id).current,false);
+        w.FluencyPractice.clear();vm.runInContext('reset()',a.ctx);
+      }
+      assert.equal(a.requests.filter(x=>x.action==='analyze').length,0,'training never invokes the legacy rewrite route');
+      await w.FluencyPractice.start('pre-speech','hint');assert.match(d.getElementById('practiceHint').textContent,/Point/);w.FluencyAccess.lock();await new Promise(r=>setTimeout(r,10));assert.equal(w.FluencyPractice.snapshot(),null);assert.equal(d.getElementById('practiceSelf').value,'');
+      console.log('PASS L06'+(multilingual?'M':'R')+': all five exercise→capture→self-assessment→diagnosis→retry→comparison loops, correction history and lock privacy');
+    }finally{a.close()}
+  }
+  console.log('All cognitive learning scenarios passed. Model/service responses are fixtures; no production writes or live Gemini calls.');
+})().catch(e=>{console.error(e);process.exitCode=1});

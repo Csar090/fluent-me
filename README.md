@@ -25,3 +25,11 @@ Read the current deployed Apps Script source and reconcile any editor-only chang
 ## Privacy and operational boundaries
 
 On-device Whisper processes audio locally; optional browser SpeechRecognition may use a browser-provided remote service. Gemini is invoked only by explicit review. Cloud audio follows the existing retention setting; local retained audio lasts until locally deleted. Backup JSON is a portable unencrypted export, distinct from encrypted IndexedDB. Local Delete does not delete cloud history, which synchronization can restore. Clearing site data removes local records; preserve a backup first. Offline shell caching does not provide fresh Google authorization. First-time service-worker registration from the multilingual-only route remains a known pre-existing limitation pending a separate registration-path repair.
+
+## Cognitive practice — expanded Phase 1
+
+Five versioned exercises reuse Capture and the existing attempt grouping: point extraction, pre-speech compression, structure selection, meaning-preserving compression and spontaneous response. Load exercises, choose independent or hinted practice, prepare, press Ready, and record or enter a response. Save and open the existing review view to use the separate Cognitive training panel. Give a self-assessment, request diagnosis, load feedback, retry the same task and compare the evidence. The legacy review perspectives, rewrites and scores remain available.
+
+This frontend requires the complete Phase 1 Apps Script modules for learning APIs; see `backend/README.md`. Until that backend is deployed, existing features continue working and the exercise loader explains the required update. No new service, trigger, background AI assessment or PIOUS change is introduced.
+
+Tests: `npm test` runs the original regression scenarios and the expanded learning workflow tests. Model responses and Google services are simulated; live model quality and visual/microphone acceptance remain separate release checks.
