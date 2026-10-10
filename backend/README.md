@@ -27,8 +27,16 @@ New application sessions last eight hours and are stored durably under hashed to
 
 ## Telegram delivery
 
-Run `Telegram_enablePolling` once after updating the backend. It disconnects the failing webhook without dropping pending updates, imports the waiting messages, and installs a one-minute `Telegram_poll` trigger. Keep the existing bot token, chat allowlist, database and audio folder. Cloudflare is no longer needed for ingestion.
+`Telegram_enablePolling` retains its existing legacy function name but currently disconnects the webhook and selects **MANUAL** mode; it removes `Telegram_poll` triggers and does not install a recurring trigger. Run it only when deliberately configuring this manual delivery mode. Pending bot updates are preserved. Existing bot token, allowlist, database and folder stay unchanged.
 
+The app's explicit **Telegram → Refresh** sends authenticated `telegramSync` with a UUID `jobId`. The backend claims one AI_Jobs row, runs the existing manual-sync operation and records DONE or ERROR. The frontend polls the existing `job` endpoint before reloading saved Sessions. A locked/busy import is reported as retryable rather than falsely completed. Requests without `jobId` still use the previous `Telegram_manualSync()` return contract. Automatic page refresh/sync/visibility checks do not call the import action.
 `Telegram_getWebhookInfo` logs a sanitized delivery report: mode, last check, last receipt, and errors. The dashboard exposes the same report through **Telegram → Check delivery**. Failed downloads are retried without advancing past the failed update; files over the 12 MB handoff limit remain visible as failed imports without blocking later messages.
 
 Do not run `Telegram_setupWebhook` while polling is enabled. A bot must use one delivery mechanism at a time.
+
+
+## Phase 0A deployment and acceptance
+
+Build `20261010-0a` requires the matching frontend and `backend/Code.gs`. No schema change or setup rerun is required for an already configured database with the existing AI_Jobs table. Do not reset properties or create a new deployment URL. Update backend first, then frontend. Inspect current editor source for changes newer than the repository baseline before replacement.
+
+Verify approved/denied sign-in, an explicit bot recording import, import failure/retry, saving imported text and multilingual corrections, and actual clipboard paste on supported browsers. Preserve earlier reviews, timestamps, records and retention behavior. For rollback, select the prior Apps Script deployment version and restore the prior frontend commit; do not delete history or rotate the browser storage key. Full release acceptance remains pending the live checks in the Phase 0A audit.

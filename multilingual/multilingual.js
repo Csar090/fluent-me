@@ -10,12 +10,13 @@
     const needle=' '+String(phrase||'').normalize('NFKC').toLocaleLowerCase().replace(/[^\p{L}\p{M}\p{N}\u2019']+/gu,' ').replace(/\s+/g,' ').trim()+' ';
     if(needle.trim()==='')return 0;let n=0,p=0;while((p=hay.indexOf(needle,p))>=0){n++;p+=needle.length-1}return n;
   };
-  window.FluencyLanguage={mode:getMode,script:getScript,speechLang,modelFor,tokenize};
+  window.FluencyLanguage={mode:getMode,script:getScript,speechLang,modelFor,tokenize,countPhrase};
 
+  const timingAnalyze=analyze;
   analyze=function(){
     const text=$('transcript').value,words=tokenize(text),fs=$('fillerWords').value.split(',').map(x=>x.trim()).filter(Boolean);
     let fillers=0;fs.forEach(f=>fillers+=countPhrase(text,f));
-    return{words:words.length,fillers,rate:words.length?Math.round(fillers*1000/words.length)/10:0,wpm:duration?Math.round(words.length/(duration/60)):0};
+    const rate=words.length?Math.round(fillers*1000/words.length)/10:0;return Object.assign({},timingAnalyze(),{words:words.length,fillers,rate,fillerRate:rate,wpm:duration?Math.round(words.length/(duration/60)):0});
   };
   metrics=function(){const m=analyze();$('metrics').innerHTML='<span>'+m.words+' words</span><span>'+m.fillers+' fillers ('+m.rate+'/100)</span><span>'+(m.wpm||'—')+' WPM</span>'};
 
@@ -46,8 +47,7 @@
     mode.onchange=apply;script.onchange=apply;apply();
     setTimeout(()=>{
       if(window.FluencyCloud?.rubric){const old=window.FluencyCloud.rubric;window.FluencyCloud.rubric=function(){const r=old();const m=getMode(),s=getScript();r.languageMode=m;r.transcriptScript=s;r.custom=[r.custom,'LANGUAGE MODE: '+m+'. Transcript preference: '+s+'. Evaluate communication in the language actually used. For Hindi, assess natural Hindi communication; for Hinglish, preserve and assess natural code-switching and do not penalize English/Hindi mixing by itself. Distinguish communication weakness from language choice. Rewrites should remain in the speaker’s dominant language/mix unless explicitly requested otherwise.'].filter(Boolean).join('\n');return r}};
-      }
-      if(window.FluencyWorkflow?.captureRow){const oldCapture=window.FluencyWorkflow.captureRow;window.FluencyWorkflow.captureRow=async function(){const row=await oldCapture();row.languageMode=getMode();row.transcriptScript=getScript();row.metrics=Object.assign({},row.metrics,{languageMode:getMode()});return row}};
+      if(window.FluencyWorkflow?.captureRow){const oldCapture=window.FluencyWorkflow.captureRow;window.FluencyWorkflow.captureRow=async function(){const row=await oldCapture();row.languageMode=getMode();row.transcriptScript=getScript();row.metrics=Object.assign({},row.metrics,{languageMode:getMode(),transcriptScript:getScript()});return row}};
     },0);
   });
 })();

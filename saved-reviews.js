@@ -13,7 +13,7 @@
     const jobId=crypto.randomUUID(),revision=Number(row.metrics?.transcriptRevision||1),transcript=row.transcript;active.set(row.id,jobId);
     try{
       onStatus('Confirming this transcript in Google…');await api.cloudSave(row,{forReview:true});
-      const rubric=api.rubric();rubric.mode=row.context;rubric.analysisVersion='2.5';rubric.rubricVersion='communication-v2.5';rubric.perspective=lens;
+      const rubric=api.rubric();rubric.mode=row.context;rubric.custom=[rubric.custom,window.FluencyImport?.reviewInstruction(row)].filter(Boolean).join('\n');rubric.analysisVersion='2.5';rubric.rubricVersion='communication-v2.5';rubric.perspective=lens;
       if(lens!=='all'){rubric.criteria=Object.fromEntries(Object.keys(lenses).filter(k=>!['all','custom'].includes(k)).map(k=>[k,k===lens]));rubric.custom=[rubric.custom,'Focus this review on '+(lenses[lens]||lens)+'.',custom].filter(Boolean).join('\n')}
       else if(custom)rubric.custom=[rubric.custom,custom].filter(Boolean).join('\n');
       if(lens==='all'||lens==='humorWit')rubric.custom+='\nProvide a complete humorousVersion rewrite of this message, with natural wit, playful comparisons or self-directed humor. Preserve facts and intent. It may be lengthy: do not impose executive concision on this version. Do not substitute applicability advice for the rewrite. For a complete review also supply executiveVersion and punchyVersion.';
@@ -48,7 +48,16 @@
     button.onclick=()=>request(panel.querySelector('.saved-lens').value);if(humor)humor.onclick=()=>request('humorWit');
     panel.querySelector('.next-attempt')?.addEventListener('click',()=>window.FluencyWorkflow.nextAttempt(row));
     panel.querySelector('.edit-transcript').onclick=()=>window.FluencyWorkflow.edit(row);
-    panel.querySelector('.saved-prompt').onclick=async()=>{try{await navigator.clipboard.writeText('Review this communication for '+lenses[panel.querySelector('.saved-lens').value]+'. Preserve facts and meaning. Give evidence, a practice drill, executiveVersion, punchyVersion and a complete humorousVersion with no brevity limit. Do not infer vocal delivery from text.\n'+panel.querySelector('.saved-custom').value+'\nTranscript:\n'+row.transcript);status.textContent='Prompt copied.'}catch(e){status.textContent=e.message}};
+    panel.querySelector('.saved-prompt').onclick=()=>{
+      const lens=panel.querySelector('.saved-lens').value,custom=panel.querySelector('.saved-custom').value;
+      return window.FluencyClipboard.copy({button:panel.querySelector('.saved-prompt'),onStatus:msg=>status.textContent=msg,build:async()=>{
+        const latest=(await all()).find(item=>item.id===row.id);
+        if(!panel.isConnected||!latest)throw Error('This saved sample is no longer available. Reopen it and retry.');
+        if(panel.querySelector('.saved-lens').value!==lens||panel.querySelector('.saved-custom').value!==custom)throw Error('The review selection changed. Copy again.');
+        const rubric=window.FluencyCloud.rubric();
+        return window.FluencyClipboard.payload(latest,{perspective:lens,criteria:rubric.criteria,custom:[rubric.custom,custom,window.FluencyImport?.reviewInstruction(latest)].filter(Boolean).join('\n'),instructions:'Review this communication for '+lenses[lens]+'. Preserve facts and meaning. Give evidence, a practice drill, executiveVersion, punchyVersion and a complete humorousVersion with no brevity limit. Do not infer vocal delivery from text.'});
+      }});
+    };
   }
   function renderCurrent(row){mount(row,$('aiResult'));$('aiResult').hidden=false}
   function open(row){

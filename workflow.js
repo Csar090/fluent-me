@@ -17,8 +17,8 @@
   function tab(name){if($('sessionDialog').open)$('sessionDialog').close();document.querySelectorAll('body>nav [data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));document.querySelectorAll('main>.tab').forEach(x=>x.classList.toggle('active',x.id===name));refreshShortcuts();jump(name);}
   function correctedMetrics(row,text){
     const m=Object.assign({},row.metrics||{}),changed=text!==String(row.transcript||'');
-    const words=text.match(/[a-z0-9\u2019']+/gi)||[];let fillers=0;
-    $('fillerWords').value.split(',').map(x=>x.trim()).filter(Boolean).forEach(f=>{const pattern=f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');fillers+=(text.match(new RegExp('\\b'+pattern+'\\b','gi'))||[]).length});
+    const words=window.FluencyLanguage?.tokenize(text)||text.match(/[a-z0-9\u2019']+/gi)||[];let fillers=0;
+    $('fillerWords').value.split(',').map(x=>x.trim()).filter(Boolean).forEach(f=>{const pattern=f.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+');fillers+=window.FluencyLanguage?.countPhrase?window.FluencyLanguage.countPhrase(text,f):(text.match(new RegExp('\\b'+pattern+'\\b','gi'))||[]).length});
     Object.assign(m,{words:words.length,fillers,rate:words.length?Math.round(fillers*1000/words.length)/10:0,wpm:row.duration?Math.round(words.length*60/row.duration):0});m.fillerRate=m.rate;
     if(changed){m.transcriptRevision=revision(row)+1;m.transcriptCorrectedAt=new Date().toISOString();m.timingTranscriptMatches=false;}else m.transcriptRevision=revision(row);
     return m;
@@ -41,7 +41,7 @@
     if(saving)return null;if(recorder?.state==='recording')throw Error('Stop the recording before saving.');
     if(!blob&&!$('transcript').value.trim()){toast('Record audio or add a transcript.');return null;}
     saving=true;$('saveBtn').disabled=true;$('repeatBtn').disabled=true;
-    try{const row=await captureRow();await persist(row);loaded=row;$('groupId').value=row.groupId;$('captureSaveStatus').textContent=window.FluencyCloud.configured()?'Saved on this device and confirmed in Google.':'Saved on this device; Google sync is pending.';await render();if(row.source==='TELEGRAM'&&row.transcript&&window.FluencyCloud.configured())document.dispatchEvent(new Event('fluency-cloud-synced'));$('repeatBtn').hidden=false;await compare(row.groupId);if(repeat)await nextAttempt(row);return row;}
+    try{const row=await window.FluencyWorkflow.captureRow();await persist(row);loaded=row;$('groupId').value=row.groupId;$('captureSaveStatus').textContent=window.FluencyCloud.configured()?'Saved on this device and confirmed in Google.':'Saved on this device; Google sync is pending.';await render();if(row.source==='TELEGRAM'&&row.transcript&&window.FluencyCloud.configured())document.dispatchEvent(new Event('fluency-cloud-synced'));$('repeatBtn').hidden=false;await compare(row.groupId);if(repeat)await nextAttempt(row);return row;}
     catch(e){$('captureSaveStatus').textContent='Save needs attention: '+e.message;toast(e.message);return null;}
     finally{saving=false;$('saveBtn').disabled=false;$('repeatBtn').disabled=false;}
   }
@@ -70,7 +70,7 @@
       if(!confirm('Save the current capture before editing this transcript?'))return;
       if(!await saveCapture())return;
     }
-    reset();loaded=row;window.FluencyV23.wordTimestamps=(row.wordTimestamps||[]).slice();window.FluencyV23.activeTelegram=row.source==='TELEGRAM'?row:null;
+    reset();loaded=row;window.FluencyImport?.restore(row);window.FluencyV23.wordTimestamps=(row.wordTimestamps||[]).slice();window.FluencyV23.activeTelegram=row.source==='TELEGRAM'?row:null;
     ['title','context','audience','reflection','tags','transcript','timestampedTranscript'].forEach(k=>$(k).value=row[k]||'');
     $('sessionId').value=row.id;$('groupId').value=row.groupId||row.id;$('attemptNo').value=row.attempt||1;$('attemptBadge').textContent='Attempt '+(row.attempt||1);
     duration=Number(row.duration)||0;blob=row.audio||null;$('timer').textContent=time(duration);$('playback').hidden=!blob;
@@ -94,7 +94,7 @@
     new MutationObserver(refreshShortcuts).observe($('reviewPanel'),{attributes:true,attributeFilter:['hidden']});new MutationObserver(refreshShortcuts).observe($('comparePanel'),{attributes:true,attributeFilter:['hidden']});refreshShortcuts();
     $('saveCorrectionsBtn').onclick=()=>saveCapture();$('practiceBtn').onclick=()=>nextAttempt();
     $('repeatBtn').onclick=()=>saveCapture(true);$('saveBtn').onclick=()=>saveCapture();
-    $('recordBtn').onclick=async()=>{if(recorder?.state==='recording')return toggle();const saved=(await all()).find(x=>x.id===$('sessionId').value);if(saved){const row=await saveCapture();if(!row)return;await nextAttempt(row);}return toggle();};
+    $('recordBtn').onclick=async()=>{if(recorder?.state==='recording')return toggle();const saved=(await all()).find(x=>x.id===$('sessionId').value);if(saved){const row=await saveCapture();if(!row)return;await nextAttempt(row);if($('sessionId').value===row.id)return;}const result=await toggle();if(recorder?.state==='recording')window.FluencyImport?.startRecording();return result;};
     $('redoTranscriptBtn').onclick=async()=>{try{if(!blob){const payload=await window.FluencyCloud.jsonp('audio',{sessionId:$('sessionId').value},60000);blob=new Blob([Uint8Array.from(atob(payload.base64),c=>c.charCodeAt(0))],{type:payload.mimeType||'audio/ogg'});$('playback').src=URL.createObjectURL(blob);$('playback').hidden=false;}await transcribeRecordedAudio();}catch(e){toast('Audio unavailable: '+e.message)}};
     $('transcript').addEventListener('input',()=>{$('captureSaveStatus').textContent='Transcript changed. Save corrections before leaving.'});
   }

@@ -36,7 +36,7 @@
     $('repeatBtn').hidden=false;
   }
   $('transcript').addEventListener('input',enhanceReview);
-  $('copyCoachBtn').onclick=async function(){const p='Act as my communication coach, not a judge. Preserve my voice. Review this sample for clarity, structure, decisiveness, executive presence and impact. Separate objective observations from coaching inference. Give: (1) what worked, (2) key improvement, (3) executiveVersion, (4) punchyVersion, (5) a complete humorousVersion that preserves facts without a length limit, and (6) a next-practice drill.\n\nMetrics: '+JSON.stringify(lastMetrics)+'\nTranscript:\n'+$('transcript').value;await navigator.clipboard.writeText(p);toast('Coaching prompt copied—paste it into ChatGPT.')};
+  $('copyCoachBtn').onclick=()=>window.FluencyClipboard.copy({button:$('copyCoachBtn'),build:window.FluencyClipboard.capturePayload});
 
   const oldRender=render;render=renderEnhanced;
   async function renderEnhanced(){
@@ -59,7 +59,7 @@
   $('restoreInput').onchange=async function(e){const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!Array.isArray(d.samples))throw Error('Invalid backup');for(const r of d.samples)await put(Object.assign({},r,{audio:typeof r.audio==='string'?dataToBlob(r.audio):null}));toast(d.samples.length+' sessions restored');await renderEnhanced()}catch(err){toast('Restore failed: '+err.message)}e.target.value=''};
   $('sessionId').value=crypto.randomUUID();$('groupId').value=crypto.randomUUID();$('attemptNo').value=1;enhanceReview();
   document.addEventListener('DOMContentLoaded',function(){
-    $('copyCoachBtn').onclick=async function(){const p='Act as my communication coach, not a judge. Preserve my voice. Review this sample for clarity, structure, decisiveness, executive presence and impact. Separate objective observations from coaching inference. Give: (1) what worked, (2) key improvement, (3) executiveVersion, (4) punchyVersion, (5) a complete humorousVersion that preserves facts without a length limit, and (6) a next-practice drill.\n\nMetrics: '+JSON.stringify(lastMetrics)+'\nTranscript:\n'+$('transcript').value;await navigator.clipboard.writeText(p);toast('Coaching prompt copied—paste it into ChatGPT.')};
+    $('copyCoachBtn').onclick=()=>window.FluencyClipboard.copy({button:$('copyCoachBtn'),build:window.FluencyClipboard.capturePayload});
     $('librarySearch').oninput=renderEnhanced;$('libraryContext').onchange=renderEnhanced;
     $('exportBtn').onclick=fullBackup;$('fullBackupBtn').onclick=fullBackup;
     $('restoreBtn').onclick=function(){$('restoreInput').click()};

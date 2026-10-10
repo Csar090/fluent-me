@@ -1,5 +1,5 @@
-const CACHE='fluency-os-shell-20260924-3';
-const FILES=['./','index.html','styles.css','app.js','enhancements.js','cloud.js','config.js','fluency-v23.js','fluency-v23.css','saved-reviews.js','progress.js','workflow.js','secure-storage.js','manifest.webmanifest'];
+const CACHE='fluency-os-shell-20261010-0a';
+const FILES=['./','index.html','styles.css','app.js','enhancements.js','cloud.js','config.js','fluency-v23.js','fluency-v23.css','saved-reviews.js','progress.js','workflow.js','secure-storage.js','clipboard.js','import.js','multilingual/','multilingual/index.html','multilingual/multilingual.js','manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(xs=>Promise.all(xs.filter(x=>x.startsWith('fluency-os-')&&x!==CACHE).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
