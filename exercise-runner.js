@@ -33,10 +33,10 @@
   function snapshot(){if(!practice)return null;practice.selfAssessment=$('practiceSelf')?.value||practice.selfAssessment||'';return clone(practice)}
   function restore(row){practice=clone(row?.metrics?.learningPractice||null);preparingAt=0;show();status(practice?'Saved task restored. Corrections keep the task and create a new transcript revision.':'Choose an exercise when ready.');}
   function clear(){practice=null;preparingAt=0;show();if($('practiceSelf'))$('practiceSelf').value='';status('Choose an exercise when ready.');}
-  async function retry(row,intervention){
+  async function retry(row,intervention,exampleEvidenceId=''){
     await load();const p=clone(row.metrics?.learningPractice);if(!p)throw Error('This is a free sample. Start the recommended exercise from Cognitive practice.');
     await window.FluencyWorkflow.nextAttempt(row);if($('sessionId').value===row.id)return null;
-    practice=Object.assign(p,{parentSessionId:row.id,interventionId:intervention?.id||'',selfAssessment:'',preparationElapsedSeconds:null,assistance:$('practiceAssistance')?.value==='hint'?'hint':'independent'});preparingAt=Date.now();show();status(intervention?'Retry target: '+intervention.instruction+' Success: '+intervention.retrySuccess:'Repeat the same prompt and constraints.');return snapshot();
+    practice=Object.assign(p,{parentSessionId:row.id,interventionId:intervention?.id||'',workedExampleUsed:!!exampleEvidenceId,exampleEvidenceId:exampleEvidenceId,selfAssessment:'',preparationElapsedSeconds:null,assistance:$('practiceAssistance')?.value==='hint'?'hint':'independent'});preparingAt=Date.now();show();status(intervention?'Retry target: '+intervention.instruction+' Success: '+intervention.retrySuccess:'Repeat the same prompt and constraints.');return snapshot();
   }
   function mount(){
     if($('cognitivePracticeCard'))return;const card=document.createElement('article');card.id='cognitivePracticeCard';card.className='card';
