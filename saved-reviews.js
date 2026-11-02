@@ -86,12 +86,14 @@
     };
     // Optional cognitive features must never prevent the core review controls from binding.
     try{window.FluencyLearning?.mount(row,panel)}catch(e){console.error('Optional cognitive training panel failed to load',e);const note=document.createElement('p');note.className='note';note.textContent='Cognitive training could not load. Gemini communication review is still available.';panel.appendChild(note)}
-    // Section shortcuts only navigate the already-rendered review; they never start AI jobs.
-    if(r){
-      const targets=[['Overview',panel.querySelector('#'+prefix+' > p')],['Communication feedback',panel.querySelector('#'+prefix+' > .metrics')],['Rewrites',panel.querySelector('#'+prefix+' > section')],['Cognitive assessment',panel.querySelector('.unified-cognitive-review')],['Worked example',panel.querySelector('.unified-cognitive-review .worked-example')],['Humour',panel.querySelector('.humour-thinking')]].filter(x=>x[1]);
-      const nav=document.createElement('nav');nav.className='button-row review-navigation';nav.setAttribute('aria-label','Review sections');
-      targets.forEach(([label,target])=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{for(let p=target;p&&p!==panel;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;target.scrollIntoView?.({behavior:'smooth',block:'start'});};nav.appendChild(b)});
-      panel.querySelector('.saved-status').after(nav);
+    // Persistent review shortcuts reuse the page rail or a rail inside the open Library dialog.
+    const inDialog=parent.id==='sessionDetail', railHost=inDialog?$('sessionDialog'):$('captureShortcuts');
+    railHost?.querySelector('.review-navigation')?.remove();
+    if(r&&railHost){
+      const targets=[['Overview',panel.querySelector('#'+prefix+' > p')],['Communication',panel.querySelector('#'+prefix+' > .metrics')],['Rewrites',panel.querySelector('#'+prefix+' > section')],['Cognitive',panel.querySelector('.unified-cognitive-review')],['Worked example',panel.querySelector('.unified-cognitive-review .worked-example')],['Humour',panel.querySelector('.humour-thinking')]].filter(x=>x[1]);
+      const nav=document.createElement('nav');nav.className='review-navigation'+(inDialog?' section-shortcuts review-dialog-shortcuts':'');nav.setAttribute('aria-label','Review sections');
+      targets.forEach(([label,target],i)=>{target.id=prefix+'-section-'+i;const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>{for(let p=target;p&&p!==panel;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;window.FluencyWorkflow.jump(target.id)};nav.appendChild(b)});
+      if(inDialog)railHost.appendChild(nav);else{nav.dataset.shortcutTab='capture';nav.dataset.jump=prefix;const after=railHost.querySelector('[data-jump="reviewPanel"]');after.after(nav);window.FluencyWorkflow.refreshShortcuts()}
     }
     // Preserve the existing collapse UX; a storage/UI failure must not disable review.
     try{window.FluencyWorkflow.collapse($(prefix),'AI review & versions','ai-review')}catch(e){console.error('Review collapse control unavailable',e)}
