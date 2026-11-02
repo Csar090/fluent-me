@@ -13,6 +13,13 @@
     else if(!r.workedExample.thinkingWalkthrough)missing.push('speech-specific thinking walkthrough');
     return missing;
   }
+  function humourThinkingHtml(r){
+    const h=r?.humourThinking;
+    if(!h)return '<p class="note">Humour thinking was not available in this saved review'+(r?.humourThinkingStatus==='INVALID'?' because the returned analysis could not be validated.':'.')+'</p>';
+    if(h.status!=='APPLICABLE')return '<p class="note">'+safe(h.reason||'There is not enough context for a suitable humorous take.')+'</p>';
+    const items=a=>Array.isArray(a)?a.map(x=>'<li>'+safe(x)+'</li>').join(''):'';
+    return '<p><b>Context:</b> '+safe(h.context)+'</p><p><b>What you said:</b> “'+safe(h.sourceQuote)+'”</p><p><b>Underlying meaning:</b> '+safe(h.underlyingMeaning)+'</p><p><b>Humour opportunity:</b> '+safe(h.opportunity)+'</p><p><b>Humorous angle:</b> '+safe(h.angle)+'</p><h4>Building the layers</h4><ol>'+items(h.layers)+'</ol><h4>How to think of it</h4><ol>'+items(h.thinkingSteps)+'</ol><p><b>Humorous take:</b> '+safe(h.humorousTake)+'</p><p><b>Why it works:</b> '+safe(h.whyItWorks)+'</p><p><b>When to use:</b> '+safe(h.whenToUse)+'</p><p><b>When not to use:</b> '+safe(h.whenNotToUse)+'</p>';
+  }
   async function history(row){return (await window.FluencyCloud.jsonp('learningHistory',{sessionId:row.id},30000)).entries||[]}
   async function assess(row,selfAssessment,onStatus=()=>{},purposeOverride='auto'){
     if(!window.FluencyAccess?.isReady())throw Error('Sign in before cognitive feedback.');
@@ -94,6 +101,7 @@
       combinedOutput.innerHTML='<p class="note">This saved review comes from a backend version that did not return the full cognitive assessment. Deploy the unified Apps Script backend, then use the main review button once. Clicking independent cognitive feedback is not the fix.</p>';
     }
     if(combinedOutput.innerHTML)section.insertBefore(combinedOutput,advanced);
+    if(currentReview){const humour=document.createElement('section');humour.className='humour-thinking';humour.innerHTML='<h3>Humour: the thinking behind the take</h3>'+humourThinkingHtml(cognitive);section.appendChild(humour);}
     const run=section.querySelector('.learning-run'),load=section.querySelector('.learning-load'),retry=section.querySelector('.learning-retry'),status=section.querySelector('.learning-status'),results=section.querySelector('.learning-results');let selected=null;
     async function refresh(){const latest=(await all()).find(x=>x.id===row.id);if(!latest)throw Error('Sample unavailable. Reopen the saved sample.');const entries=await history(latest);if(!section.isConnected||!window.FluencyAccess.isReady())return;selected=entries.filter(x=>x.current&&x.evidence.sessionId===row.id&&x.result.rubricVersion==='cognitive-v1').at(-1);results.innerHTML=compare(entries,latest)+entries.slice().reverse().map(resultHtml).join('');if(!entries.length)results.innerHTML='<p class="note">No cognitive feedback saved for this attempt group.</p>';retry.disabled=!latest.metrics?.learningPractice||!selected;const exampleUsed=section.querySelector('.learning-example-used');exampleUsed.disabled=!selected?.result?.workedExample;if(exampleUsed.disabled)exampleUsed.checked=false;status.textContent='Saved cognitive feedback loaded. Historical revisions are labelled.';}
     run.disabled=!row.transcript;run.onclick=async()=>{run.disabled=true;try{const latest=(await all()).find(x=>x.id===row.id);if(!latest)throw Error('Sample unavailable.');await assess(latest,section.querySelector('.learning-self').value,msg=>status.textContent=msg,section.querySelector('.learning-purpose')?.value||'auto');await refresh()}catch(e){status.textContent=e.message}finally{run.disabled=!row.transcript}};
@@ -108,6 +116,6 @@
     retry.onclick=async()=>{retry.disabled=true;try{const latest=(await all()).find(x=>x.id===row.id);if(!latest||!selected||rev(latest)!==selected.evidence.transcriptRevision||latest.transcript!==selected.evidence.transcript)throw Error('Transcript changed. Load current feedback first.');await window.FluencyPractice.retry(latest,selected.result.intervention,section.querySelector('.learning-example-used').checked?selected.evidence.evidenceId:'')}catch(e){status.textContent=e.message}finally{retry.disabled=!selected}};
     const observer=new MutationObserver(()=>{if(!section.isConnected){observer.disconnect();return}if(!window.FluencyAccess?.isReady()){results.replaceChildren();section.querySelector('.learning-self').value='';selected=null;retry.disabled=true;section.querySelector('.learning-example-used').checked=false;section.querySelector('.learning-example-used').disabled=true}});observer.observe(document.documentElement,{attributes:true,attributeFilter:['class']});
   }
-  window.FluencyLearning={assess,history,mount,compare,resultHtml,workedExampleHtml};
+  window.FluencyLearning={assess,history,mount,compare,resultHtml,workedExampleHtml,humourThinkingHtml};
 })();
 
