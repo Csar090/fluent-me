@@ -89,6 +89,13 @@
     $('compareContent').innerHTML=window.FluencyProgress?.comparison(rows.at(-2),rows.at(-1))||'';
   }
   function mount(){
+    $('recordBtn').onclick=async()=>{if(recorder?.state==='recording')return toggle();try{
+      // Unsaved captures must not wait for a database lookup before microphone permission.
+      const sessionId=$('sessionId').value;
+      const saved=sessionId?(await all()).find(x=>x.id===sessionId):null;
+      if(saved){const row=await saveCapture();if(!row)return;await nextAttempt(row);if($('sessionId').value===row.id)return;}
+      const result=await toggle();if(recorder?.state==='recording')window.FluencyImport?.startRecording();return result;
+    }catch(e){$('status').textContent='Recording unavailable';$('support').textContent='Could not prepare recording: '+(e?.message||String(e));toast('Recording could not start. See microphone status.');console.error('Fluent Me recording preparation failed',e)}};
     collapse($('transcriptBody'),'Transcript','transcript');collapse($('timestampSegments'),'Word-timestamped transcription','timestamps');
     const count=document.createElement('span');count.id='timestampSummary';count.className='note';$('timestampSegments').previousElementSibling.querySelector('h3').append(document.createElement('br'),count);
     document.querySelectorAll('body>nav [data-tab]').forEach(b=>b.onclick=()=>tab(b.dataset.tab));
@@ -96,7 +103,7 @@
     new MutationObserver(refreshShortcuts).observe($('reviewPanel'),{attributes:true,attributeFilter:['hidden']});new MutationObserver(refreshShortcuts).observe($('comparePanel'),{attributes:true,attributeFilter:['hidden']});refreshShortcuts();
     $('saveCorrectionsBtn').onclick=()=>saveCapture();$('practiceBtn').onclick=()=>nextAttempt();
     $('repeatBtn').onclick=()=>saveCapture(true);$('saveBtn').onclick=()=>saveCapture();
-    $('recordBtn').onclick=async()=>{if(recorder?.state==='recording')return toggle();const saved=(await all()).find(x=>x.id===$('sessionId').value);if(saved){const row=await saveCapture();if(!row)return;await nextAttempt(row);if($('sessionId').value===row.id)return;}const result=await toggle();if(recorder?.state==='recording')window.FluencyImport?.startRecording();return result;};
+
     $('redoTranscriptBtn').onclick=async()=>{try{if(!blob){const payload=await window.FluencyCloud.jsonp('audio',{sessionId:$('sessionId').value},60000);blob=new Blob([Uint8Array.from(atob(payload.base64),c=>c.charCodeAt(0))],{type:payload.mimeType||'audio/ogg'});$('playback').src=URL.createObjectURL(blob);$('playback').hidden=false;}await transcribeRecordedAudio();}catch(e){toast('Audio unavailable: '+e.message)}};
     $('transcript').addEventListener('input',()=>{$('captureSaveStatus').textContent='Transcript changed. Save corrections before leaving.'});
   }
