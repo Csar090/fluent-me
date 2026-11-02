@@ -3,6 +3,16 @@
   const active=new Map();
   const safe=x=>esc(String(x??''));
   const rev=row=>Number(row.metrics?.transcriptRevision)||1;
+  function missingComponents(r){
+    const missing=[];
+    if(r?.status!=='SUPPORTED')missing.push('sufficient diagnostic evidence');
+    if(!r?.contextDiagnosis?.purposeId)missing.push('communication purpose');
+    if(!r?.contextDiagnosis?.reason||r.contextDiagnosis.reason==='Communication purpose was not established from the supplied evidence.')missing.push('purpose explanation');
+    if(!r?.recommendedPrinciple||!r?.intervention?.recommendedExerciseId)missing.push('evidence-linked principle and practice');
+    if(!r?.workedExample)missing.push('validated worked example');
+    else if(!r.workedExample.thinkingWalkthrough)missing.push('speech-specific thinking walkthrough');
+    return missing;
+  }
   async function history(row){return (await window.FluencyCloud.jsonp('learningHistory',{sessionId:row.id},30000)).entries||[]}
   async function assess(row,selfAssessment,onStatus=()=>{},purposeOverride='auto'){
     if(!window.FluencyAccess?.isReady())throw Error('Sign in before cognitive feedback.');
@@ -52,8 +62,10 @@
     // The legacy standalone cognitive assessment remains available on explicit request only.
     const validReview=!!row.aiReview&&rev(row)===Number(row.aiReview.transcriptRevision||1);
     const combined=Boolean(validReview&&row.aiReview.cognitiveAssessmentStatus==='AVAILABLE'&&row.aiReview.cognitiveAssessment);
+    const missing=combined?missingComponents(row.aiReview.cognitiveAssessment):[];
+    if(combined&&row.aiReview.cognitiveEvidenceStatus!=='STORED')missing.push('confirmed cognitive evidence storage');
     const message=document.createElement('p');message.className='note learning-one-pass';
-    message.textContent=combined?'Complete communication and cognitive assessment generated together from one Gemini request. Both results appear on this screen.':validReview?'This saved review does not yet include a completed cognitive assessment. Use the main “Review with Gemini AI” button above to request both together; do not request independent cognitive feedback.':'Use “Review with Gemini AI” above once to request communication and cognitive reviews together. A separate assessment is not part of the normal workflow.';
+    message.textContent=combined?(missing.length?'Communication feedback and a partial cognitive assessment were generated together. Missing: '+missing.join(', ')+'.':'Communication and cognitive assessments were generated together from one Gemini request.'):validReview?'This saved review does not yet include a completed cognitive assessment. Use the main “Review with Gemini AI” button above to request both together; do not request independent cognitive feedback.':'Use “Review with Gemini AI” above once to request communication and cognitive reviews together. A separate assessment is not part of the normal workflow.';
     const purpose=section.querySelector('.learning-purpose')?.parentElement;
     section.insertBefore(message,purpose||section.querySelector('.learning-self').parentElement);
     const advanced=document.createElement('details');advanced.className='learning-advanced';advanced.innerHTML='<summary>Advanced: independent cognitive exercises and retries (not required for a normal review)</summary><p class="note">Use only for a deliberately separate cognitive assessment or an exercise retry. The primary Gemini communication review already requests the complete cognitive assessment.</p>';
@@ -67,10 +79,11 @@
     const combinedOutput=document.createElement('section');combinedOutput.className='unified-cognitive-review';
     if(currentReview&&combinedReview.cognitiveAssessmentStatus==='AVAILABLE'&&cognitive){
       const evidence={sessionId:row.id,attempt:row.attempt||1,transcriptRevision:rev(row),transcript:row.transcript,assistance:row.metrics?.learningPractice?.assistance||'UNKNOWN',practice:row.metrics?.learningPractice||null};
-      combinedOutput.innerHTML='<h4>Complete cognitive assessment — included in this Gemini review</h4>'+
+      combinedOutput.innerHTML='<h4>'+(missing.length?'Partial cognitive assessment':'Complete cognitive assessment')+' — included in this Gemini review</h4>'+
+        (missing.length?'<p class="note">Missing or unvalidated: '+missing.map(safe).join(', ')+'. Existing feedback is retained.</p>':'')+
         '<p class="note">Same review request • '+safe(combinedReview.cognitiveEvidenceStatus==='STORED'?'Evidence saved to cognitive history.':'Assessment included in this review; separate evidence-history storage is not yet confirmed.')+'</p>'+
-        resultHtml({current:true,evidence: evidence,result:cognitive},{omitWorkedExample:!!combinedReview.teachingExample});
-      message.textContent='One Gemini review completed both assessments. The cognitive analysis appears below, with the worked example and thinking structure above. No further AI request is needed.';
+        resultHtml({current:true,evidence: evidence,result:cognitive},{omitWorkedExample:false});
+      message.textContent=missing.length?'One Gemini review returned communication feedback and a partial cognitive assessment. Missing: '+missing.join(', ')+'.':'One Gemini review completed both assessments. The cognitive analysis and worked example appear below.';
     }else if(currentReview&&combinedReview.cognitiveAssessmentStatus==='VALIDATION_FAILED'){
       combinedOutput.innerHTML='<p class="note">Communication feedback was retained, but the cognitive assessment did not pass evidence validation. This is not a completed cognitive review. The full review can be requested again after the issue is corrected.</p>';
     }else if(currentReview&&combinedReview.cognitiveAssessmentStatus==='EVIDENCE_UNAVAILABLE'){
@@ -97,3 +110,4 @@
   }
   window.FluencyLearning={assess,history,mount,compare,resultHtml,workedExampleHtml};
 })();
+
