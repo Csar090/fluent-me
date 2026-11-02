@@ -35,10 +35,27 @@
     const scores=Object.entries(r.scores||{}).filter(([k,v])=>k!=='humorWit'&&typeof v==='number').map(([k,v])=>'<span>'+esc(lenses[k]||k)+': '+v+'</span>').join('');
     return '<p>'+esc(r.summary||'')+'</p><div class="metrics">'+scores+'</div><p><b>What worked:</b> '+esc((r.whatWorked||r.strengths||[]).join(' • '))+'</p><p><b>What needs work:</b> '+esc((r.needsWork||[]).map(x=>(x.dimension?x.dimension+': ':'')+(x.issue||x.coach||'')).join(' • ')||r.primaryLeak||r.primaryLever||'—')+'</p>';
   }
+  function teachingHtml(row,r){
+    const x=r?.teachingExample;
+    if(!x)return r?.teachingExampleStatus&&r.teachingExampleStatus!=='NOT_RETURNED'?'<p class="note">The communication review is saved. Its optional teaching example could not be validated; existing scores and versions remain available.</p>':'';
+    if(!current(row,r))return '<p class="note">Teaching example belongs to an earlier transcript revision. Review the corrected transcript to generate a current example.</p>';
+    const p=x.principle||{},segments=Array.isArray(x.structure)?x.structure:[],changes=Array.isArray(x.transformations)?x.transformations:[];
+    const exercise=['point-extraction','pre-speech','structure-selection','compression','spontaneous'].includes(x.recommendedExerciseId)?x.recommendedExerciseId:'';
+    return '<details class="review-teaching"><summary>How this could have been presented — learn by example</summary>'+
+      '<p class="note">Same ideas, reorganised for this review perspective. This is an AI teaching example, not evidence of mastery.</p>'+
+      '<p><b>Principle:</b> '+esc(p.name||'')+' — '+esc(p.why||'')+'</p>'+
+      '<p><b>Original speech</b></p><p class="detail-text">'+esc(row.transcript||'')+'</p>'+
+      '<p><b>How I could present the same speech</b></p><p class="detail-text">'+esc(x.improvedResponse||'')+'</p>'+
+      '<p><b>Main point retained:</b> '+esc(x.mainPoint||'')+'</p>'+
+      '<h4>How the thinking is structured</h4><ol>'+segments.map(s=>'<li><b>'+esc(s.role||'')+':</b> '+esc(s.text||'')+' <span class="note">Why here: '+esc(s.why||'')+'</span></li>').join('')+'</ol>'+
+      '<h4>Learn by emulating the transformation</h4>'+changes.map(t=>'<p><b>Original:</b> “'+esc(t.sourceQuote||'')+'”<br><b>Reworked:</b> “'+esc(t.targetQuote||'')+'”<br><b>'+esc(t.operation||'')+':</b> '+esc(t.why||'')+'</p>').join('')+
+      '<p><b>Before speaking:</b> '+esc(p.cue||'')+'</p><p><b>Use when:</b> '+esc(p.whenToUse||'')+' <b>Not always when:</b> '+esc(p.whenNotToUse||'')+'</p>'+
+      (exercise?'<button type="button" class="review-practice" data-exercise="'+esc(exercise)+'">Practise this principle</button>':'')+'</details>';
+  }
   function mount(row,parent){
     parent.querySelector('.saved-review-panel')?.remove();const panel=document.createElement('section');panel.className='saved-review-panel';
     const previous=reviews(row),r=row.aiReview,stale=r&&!current(row,r),prefix=parent.id+'-review',practice=r?.drill?.instruction||r?.nextPractice?.join(' • ')||r?.practiceChallenge;
-    panel.innerHTML='<div id="'+prefix+'"><p class="note">Gemini runs only when you request a review. Saved recordings can be reviewed from another perspective at any time.</p>'+(stale?'<p class="review-stale">Transcript corrected since this review. Earlier feedback is retained; request a new review for the corrected text.</p>':'')+reviewHtml(r)+(practice?'<div class="coach challenge"><b>Next practice</b><span>'+esc(practice)+'</span><button class="next-attempt">Record next attempt</button></div>':'')+[['executiveVersion','Executive version'],['punchyVersion','Punchier version'],['humorousVersion','Humorous version']].map(([key,title])=>{const text=version(row,key);return '<section><h4>'+title+'</h4><p class="detail-text">'+esc(text||(key==='humorousVersion'?'A humorous rewrite has not been generated for this transcript.':'Not generated for this transcript yet.'))+'</p>'+(!text&&key==='humorousVersion'?'<button class="generate-humor">Generate humorous version</button>':'')+'</section>'}).join('')+
+    panel.innerHTML='<div id="'+prefix+'"><p class="note">Gemini runs only when you request a review. Saved recordings can be reviewed from another perspective at any time.</p>'+(stale?'<p class="review-stale">Transcript corrected since this review. Earlier feedback is retained; request a new review for the corrected text.</p>':'')+reviewHtml(r)+(practice?'<div class="coach challenge"><b>Next practice</b><span>'+esc(practice)+'</span><button class="next-attempt">Record next attempt</button></div>':'')+[['executiveVersion','Executive version'],['punchyVersion','Punchier version'],['humorousVersion','Humorous version']].map(([key,title])=>{const text=version(row,key);return '<section><h4>'+title+'</h4><p class="detail-text">'+esc(text||(key==='humorousVersion'?'A humorous rewrite has not been generated for this transcript.':'Not generated for this transcript yet.'))+'</p>'+(!text&&key==='humorousVersion'?'<button class="generate-humor">Generate humorous version</button>':'')+'</section>'}).join('')+teachingHtml(row,r)+
       '<div class="metrics">'+Object.keys(lenses).filter(k=>!['all','custom','humorWit'].includes(k)).map(k=>'<span>'+esc(lenses[k])+': '+coverage(row,k)+'</span>').join('')+'</div><label>Review perspective<select class="saved-lens">'+Object.entries(lenses).map(([k,v])=>'<option value="'+k+'">'+esc(v)+'</option>').join('')+'</select></label><label>Specific question or custom perspective<textarea class="saved-custom" rows="2"></textarea></label><div class="button-row"><button class="primary saved-run">Review with Gemini AI</button><button class="saved-prompt">Copy AI review prompt</button><button class="edit-transcript">Edit / correct transcript</button></div><p class="note saved-status" role="status">'+(!row.transcript?'Transcript needed: open retained audio and transcribe it locally.':'Ready when you choose.')+'</p>'+
       (previous.length>1?'<details><summary>Earlier reviews ('+(previous.length-1)+')</summary>'+previous.slice(0,-1).reverse().map(old=>'<article><h4>'+esc(lenses[old.perspective]||'Previous review')+' • '+esc(old.analyzedAt||'Earlier')+'</h4>'+reviewHtml(old)+[['executiveVersion','Executive version'],['punchyVersion','Punchier version'],['humorousVersion','Humorous version']].map(([key,label])=>old[key]?'<h4>'+label+'</h4><p class="detail-text">'+esc(old[key])+'</p>':'').join('')+'</article>').join('')+'</details>':'')+'</div>';
     parent.appendChild(panel);window.FluencyLearning?.mount(row,panel);window.FluencyWorkflow.collapse($(prefix),'AI review & versions','ai-review');
@@ -47,6 +64,12 @@
     async function request(lens){button.disabled=true;if(humor)humor.disabled=true;try{await run(row,lens,panel.querySelector('.saved-custom').value,msg=>status.textContent=msg);mount(row,parent)}catch(e){status.textContent=e.message}finally{button.disabled=!row.transcript;if(humor)humor.disabled=!row.transcript}}
     button.onclick=()=>request(panel.querySelector('.saved-lens').value);if(humor)humor.onclick=()=>request('humorWit');
     panel.querySelector('.next-attempt')?.addEventListener('click',()=>window.FluencyWorkflow.nextAttempt(row));
+    panel.querySelector('.review-practice')?.addEventListener('click',async ev=>{
+      const btn=ev.currentTarget;btn.disabled=true;
+      try{const task=await window.FluencyPractice.start(btn.dataset.exercise,'independent');if(task)window.FluencyWorkflow.tab('capture')}
+      catch(e){status.textContent='Practice could not start: '+(e?.message||String(e))}
+      finally{btn.disabled=false}
+    });
     panel.querySelector('.edit-transcript').onclick=()=>window.FluencyWorkflow.edit(row);
     panel.querySelector('.saved-prompt').onclick=()=>{
       const lens=panel.querySelector('.saved-lens').value,custom=panel.querySelector('.saved-custom').value;
