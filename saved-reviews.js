@@ -6,14 +6,14 @@
   function reviews(row){const r=row.aiReview;return r&&typeof r==='object'?[...(r.reviewHistory||[]),plain(r)]:[]}
   const current=(row,r)=>Number(r.transcriptRevision||1)===Number(row.metrics?.transcriptRevision||1);
   function coverage(row,key){const rs=reviews(row).filter(r=>current(row,r));if(key==='humorWit')return rs.some(r=>r.humorousVersion||r.humor?.humorousVersion)?'Reviewed':'Not yet reviewed';return rs.some(r=>(!r.perspective||r.perspective==='all'||r.perspective===key)&&(key==='custom'?r.perspective==='custom':typeof r.scores?.[key]==='number'))?'Reviewed':rs.some(r=>(r.reviewedCriteria||[]).includes(key))?'Assessed; insufficient evidence / N/A':'Not yet reviewed'}
-  async function run(row,lens,custom,onStatus=()=>{}){
+  async function run(row,lens,custom,onStatus=()=>{},purpose='auto'){
     const api=window.FluencyCloud;if(!api.configured())throw Error('Connect Google in Settings, then reopen this saved sample.');
     if(!String(row.transcript||'').trim())throw Error('Transcribe the recording before requesting an AI review.');
     if(active.has(row.id))throw Error('A review for this session is already running.');
     const jobId=crypto.randomUUID(),revision=Number(row.metrics?.transcriptRevision||1),transcript=row.transcript;active.set(row.id,jobId);
     try{
       onStatus('Confirming this transcript in Google…');await api.cloudSave(row,{forReview:true});
-      const rubric=api.rubric();rubric.mode=row.context;rubric.custom=[rubric.custom,window.FluencyImport?.reviewInstruction(row)].filter(Boolean).join('\n');rubric.analysisVersion='2.5';rubric.rubricVersion='communication-v2.5';rubric.perspective=lens;
+      const rubric=api.rubric();rubric.mode=row.context;rubric.audience=String(row.audience||'');rubric.communicationPurpose=['reflection','explanation','storytelling','briefing','conversation','persuasion'].includes(purpose)?purpose:'auto';rubric.custom=[rubric.custom,window.FluencyImport?.reviewInstruction(row)].filter(Boolean).join('\n');rubric.analysisVersion='2.5';rubric.rubricVersion='communication-v2.5';rubric.perspective=lens;
       if(lens!=='all'){rubric.criteria=Object.fromEntries(Object.keys(lenses).filter(k=>!['all','custom'].includes(k)).map(k=>[k,k===lens]));rubric.custom=[rubric.custom,'Focus this review on '+(lenses[lens]||lens)+'.',custom].filter(Boolean).join('\n')}
       else if(custom)rubric.custom=[rubric.custom,custom].filter(Boolean).join('\n');
       if(lens==='all'||lens==='humorWit')rubric.custom+='\nProvide a complete humorousVersion rewrite of this message, with natural wit, playful comparisons or self-directed humor. Preserve facts and intent. It may be lengthy: do not impose executive concision on this version. Do not substitute applicability advice for the rewrite. For a complete review also supply executiveVersion and punchyVersion.';
@@ -22,7 +22,7 @@
       while(Date.now()<end){await new Promise(r=>setTimeout(r,2500));const job=await api.jsonp('job',{jobId},30000);if(job.status==='ERROR')throw Error(job.error||'Review failed. Earlier reviews are retained.');if(job.status==='DONE'){result=job.result;break}}
       if(!result)throw Error('Review is still pending. Use Sync history later before retrying.');
       if(typeof result!=='object')throw Error('Gemini returned an unreadable review. You can retry.');
-      result.perspective=result.perspective||lens;result.analyzedAt=result.analyzedAt||new Date().toISOString();result.transcriptRevision=revision;
+      result.perspective=result.perspective||lens;result.reviewJobId=result.reviewJobId||jobId;result.analyzedAt=result.analyzedAt||new Date().toISOString();result.transcriptRevision=revision;
       result.reviewedCriteria=result.reviewedCriteria||Object.keys(rubric.criteria||{}).filter(k=>rubric.criteria[k]);
       const latest=(await all()).find(x=>x.id===row.id)||row;
       if(!result.reviewHistory)result.reviewHistory=reviews(latest);
@@ -61,12 +61,15 @@
     parent.appendChild(panel);
     const button=panel.querySelector('.saved-run'),status=panel.querySelector('.saved-status'),humor=panel.querySelector('.generate-humor');
     const disabled=!String(row.transcript||'').trim()||active.has(row.id);button.disabled=disabled;if(humor)humor.disabled=disabled;
-    async function request(lens){button.disabled=true;if(humor)humor.disabled=true;status.textContent='Preparing Gemini review…';try{await run(row,lens,panel.querySelector('.saved-custom').value,msg=>status.textContent=msg);mount(row,parent)}catch(e){status.textContent='Gemini review unavailable: '+(e?.message||String(e));console.error('Fluent Me review failed',e)}finally{button.disabled=!row.transcript;if(humor)humor.disabled=!row.transcript}}
+    async function request(lens){button.disabled=true;if(humor)humor.disabled=true;status.textContent='Preparing Gemini review…';try{await run(row,lens,panel.querySelector('.saved-custom').value,msg=>status.textContent=msg,panel.querySelector('.learning-purpose')?.value||'auto');mount(row,parent)}catch(e){status.textContent='Gemini review unavailable: '+(e?.message||String(e));console.error('Fluent Me review failed',e)}finally{button.disabled=!row.transcript;if(humor)humor.disabled=!row.transcript}}
     button.onclick=()=>request(panel.querySelector('.saved-lens').value);if(humor)humor.onclick=()=>request('humorWit');
     panel.querySelector('.next-attempt')?.addEventListener('click',()=>window.FluencyWorkflow.nextAttempt(row));
     panel.querySelector('.review-practice')?.addEventListener('click',async ev=>{
       const btn=ev.currentTarget;btn.disabled=true;
-      try{const task=await window.FluencyPractice.start(btn.dataset.exercise,'independent');if(task)window.FluencyWorkflow.tab('capture')}
+      try{
+        const id=r?.reviewJobId||'',source=id?{sourceAssessmentId:'review:'+id,sourceEvidenceId:id,sourceSessionId:row.id,sourceTranscriptRevision:Number(row.metrics?.transcriptRevision||1),sourcePrincipleId:r?.teachingExample?.principle?.name||''}:null;
+        const task=await window.FluencyPractice.start(btn.dataset.exercise,'independent',source);if(task)window.FluencyWorkflow.tab('capture')
+      }
       catch(e){status.textContent='Practice could not start: '+(e?.message||String(e))}
       finally{btn.disabled=false}
     });
