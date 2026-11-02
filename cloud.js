@@ -57,13 +57,21 @@
 
   function rubric(){const c=readForm();return{model:c.model||'gemini-3.1-flash-lite',criteria:c.criteria||{},custom:c.custom||'',analysisVersion:'2.0',rubricVersion:'crisp-sharp-impactful-v1',mode:$('context').value}}
   async function analyzeWithAI(){
-    const transcript=$('transcript').value.trim();if(!transcript)return toast('Record or enter a transcript first.');
-    const id=$('sessionId').value||crypto.randomUUID();$('sessionId').value=id;
-    const prior=(await all()).find(x=>x.id===id)||{};
-    const row=await window.FluencyWorkflow.captureRow();
-    $('aiReviewBtn').disabled=true;$('aiStatus').textContent='Saving session and starting communication review…';
-    try{await oldPut(row);const result=await window.FluencyReviews.run(row,'all','',msg=>$('aiStatus').textContent=msg);window.FluencyReviews.renderCurrent(row);updateFocus([{aiReview:result,aiStatus:'DONE',updatedAt:new Date().toISOString()}]);$('aiStatus').textContent='Communication review complete and linked to this session.'}
-    catch(e){$('aiStatus').textContent='AI review unavailable: '+e.message}finally{$('aiReviewBtn').disabled=false}
+    const button=$('aiReviewBtn'),status=$('aiStatus');
+    button.disabled=true;status.textContent='Preparing Gemini review…';
+    try{
+      const transcript=$('transcript').value.trim();if(!transcript)throw Error('Record or enter a transcript first.');
+      const id=$('sessionId').value||crypto.randomUUID();$('sessionId').value=id;
+      const row=await window.FluencyWorkflow.captureRow();
+      await oldPut(row);
+      const result=await window.FluencyReviews.run(row,'all','',msg=>status.textContent=msg);
+      window.FluencyReviews.renderCurrent(row);
+      updateFocus([{aiReview:result,aiStatus:'DONE',updatedAt:new Date().toISOString()}]);
+      status.textContent='Communication review complete and linked to this session.';
+    }catch(e){
+      status.textContent='AI review unavailable: '+(e?.message||String(e));
+      console.error('Fluent Me capture review failed',e);
+    }finally{button.disabled=false}
   }
   window.FluencyCloud={jsonp,post,configured,cloudSave,saveLocal:oldPut,rubric,updateFocus,auth};
   document.addEventListener('DOMContentLoaded',function(){fillForm();$('saveCloudBtn').onclick=saveConfig;$('testCloudBtn').onclick=test;$('syncCloudBtn').onclick=sync;$('aiReviewBtn').onclick=analyzeWithAI;$('signOutBtn').onclick=signOut;store(saved());bootstrap()});
