@@ -52,11 +52,24 @@
   function mountExerciseHub(){
     const host=$('exerciseCards');if(!host)return;
     const options=[
-      {name:'Storytelling',prompt:'Tell a true story about a small decision that led to an unexpected outcome. What happened, what changed, and why does it matter?',context:'Storytelling'},
-      {name:'Executive discussion',prompt:'A project is at risk of delay. Explain the issue, your recommendation, and the decision you need from a senior stakeholder.',context:'Executive Briefing'},
-      {name:'Spontaneous response',prompt:'What is one common assumption about productivity that you would question, and why?',context:'Conversation'},
-      {name:'Everyday conversation',prompt:'A friend asks what you have been thinking about recently. Share one idea naturally and explain why it matters to you.',context:'Conversation'},
-      {name:'Humour and perspective',prompt:'Describe a minor everyday frustration and find a lighter way to see it without losing the actual point.',context:'Conversation'}];
+      {name:'Point identification',context:'Conversation',prompt:'A team has too many meetings, decisions arrive late, and people repeat updates. Identify the single central point and give one reason.'},
+      {name:'Spontaneous response',context:'Conversation',prompt:'What is one common assumption about productivity that you would question, and why?'},
+      {name:'Structuring an explanation',context:'Explanation / Teaching',prompt:'Explain why a control can be well designed but still ineffective. Choose an order that helps a non-specialist follow.'},
+      {name:'Concision with nuance',context:'Executive Briefing',prompt:'Explain a project issue, your recommendation and one important limitation in 45 seconds. Preserve the caveat.'},
+      {name:'Executive discussion',context:'Executive Briefing',prompt:'A project is at risk of delay. Explain the issue, your recommendation, and the decision you need from a senior stakeholder.'},
+      {name:'Meeting contribution',context:'Meeting Contribution',prompt:'Three colleagues have suggested different solutions to a delayed project. Add a useful point without repeating what has already been said.'},
+      {name:'Handling follow-up questions',context:'Meeting Contribution',prompt:'A senior asks: Why is your recommendation better than the alternative? Answer directly and give the strongest reason and one limitation.'},
+      {name:'Disagreement and pushback',context:'Conversation',prompt:'A client asks for an unrealistic deadline during a busy audit. Explain your concern firmly and propose a constructive way forward.'},
+      {name:'Storytelling',context:'Conversation',prompt:'Tell a true story about a small decision that led to an unexpected outcome. What happened, what changed, and why does it matter?'},
+      {name:'Everyday conversation',context:'Conversation',prompt:'A friend asks what you have been thinking about recently. Share one idea naturally and explain why it matters to you.'},
+      {name:'Humour and perspective',context:'Conversation',prompt:'Describe a minor everyday frustration. Identify its point, ordinary logic and a lighter counter-logic, then make a natural humorous observation.'},
+      {name:'Explaining complex ideas simply',context:'Explanation / Teaching',prompt:'Explain audit materiality to a friend who has never worked in finance. Use an accessible example without losing the essential meaning.'},
+      {name:'Persuasion',context:'Persuasion / Recommendation',prompt:'Persuade a busy team to spend ten minutes planning before starting a complex task. Address what matters to them.'},
+      {name:'Listening and responding',context:'Conversation',prompt:'A colleague says: I find out about decisions after they are made, and it feels as if my experience is not valued. Respond to what they said, then ask a useful question.'},
+      {name:'Questions and curiosity',context:'Conversation',prompt:'A project is delayed and the team gives vague reasons. Ask a short sequence of questions that would uncover the real blocker.'},
+      {name:'Personal reflection',context:'Reflection / Thinking Aloud',prompt:'What have you been preparing for that might now need action? Explore the thought without forcing an artificial conclusion.'},
+      {name:'Memorable briefing',context:'Executive Briefing',prompt:'You are briefing a decision-maker. Background: A project is six weeks from a committed launch. Testing found a critical defect that affects a small group of customers, and the team needs two weeks to repair and retest it. The commercial team wants to retain the launch date because a major announcement is booked; postponement will cost an estimated ₹8 lakh. Launching on time would require disabling the affected feature, which changes what was promised to those customers. The technical lead says the defect cannot be safely fixed before launch, but the estimate for full retesting is uncertain. Customer support needs three days to prepare communications. No decision has yet been made. In no more than 60 words, brief the decision-maker on the issue, meaningful choices, consequence, uncertainty and decision needed. Then give a separate memorable one-line takeaway using natural rhythm, contrast or rhyme if it helps; never sacrifice accuracy or imply an unsupported recommendation.'}
+    ];
     options.forEach(x=>{const b=document.createElement('button');b.type='button';b.textContent=x.name;b.onclick=async()=>{try{
       if(recorder?.state==='recording')throw Error('Stop the recording before starting an exercise.');
       if(blob||$('transcript').value.trim()){if(!confirm('Save the current capture before starting this exercise?'))return;const saved=await window.FluencyWorkflow.saveCapture();if(!saved)return;}
