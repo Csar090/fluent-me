@@ -84,7 +84,7 @@ if(evidence&&result.cognitiveAssessment){
     cognitive.modelUsed=usedModel;
     cognitive.assessedAt=new Date().toISOString();
     cognitiveStatus='AVAILABLE';
-  }catch(err){cognitiveStatus='VALIDATION_FAILED';console.log('Unified cognitive validation failed: '+String(err&&err.message||err));}
+  }catch(err){cognitiveStatus='VALIDATION_FAILED';const match=String(err&&err.message||'').match(/\[([A-Z_]+)\]/);result.cognitiveValidationCode=match?match[1]:'VALIDATION_ERROR';try{if(result.cognitiveAssessment&&result.cognitiveAssessment.workedExample)result.cognitivePartialExample=validateWorkedExample_(result.cognitiveAssessment.workedExample,evidence);}catch(exampleErr){result.cognitivePartialExampleStatus='INVALID';}console.log('Unified cognitive validation failed: '+String(err&&err.message||err));}
 }
 result.cognitiveAssessment=cognitive;
 result.cognitiveAssessmentStatus=cognitiveStatus;
@@ -288,3 +288,4 @@ function telegramSyncJob_(body){
   try{const result=Telegram_manualSync();updateJob_(jobId,'DONE',JSON.stringify(result),'');return{ok:true,jobId};}
   catch(error){updateJob_(jobId,'ERROR','',String(error.message||error));return{ok:false,jobId,error:String(error.message||error)};}
 }
+
