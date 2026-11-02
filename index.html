@@ -19,6 +19,7 @@
 <nav>
   <button class="active" data-tab="capture">Capture</button>
   <button data-tab="library">Library</button>
+  <button data-tab="exercises">Exercises</button>
   <button data-tab="progress">Progress</button>
   <button data-tab="settings">Settings</button>
 </nav>
@@ -96,6 +97,7 @@
     </article>
   </section>
 
+  <section id="exercises" class="tab"><article class="card"><h2>Exercises</h2><p>Choose a situation and start speaking. Your saved attempts appear in Library and contribute to Progress when reviewed.</p><div id="exerciseCards" class="button-row"></div><p id="exerciseStartStatus" class="note" role="status"></p><h3>Targeted cognitive practice</h3><p>Use the existing cognitive exercises for structured tasks and linked retries.</p><button id="openCognitivePractice" type="button">Open cognitive practice</button></article></section>
   <section id="progress" class="tab">
     <div id="progressSummarySection" class="stats"><div><b id="sampleCount">0</b><span>samples</span></div><div><b id="totalMinutes">0</b><span>minutes</span></div><div><b id="avgFillers">—</b><span>fillers / 100</span></div></div>
     <article id="progressDimensionsSection" class="card"><span class="eyebrow">EVIDENCE → TREND → PRACTICE</span><h2>Communication progress</h2><p class="note">Track comparable AI-reviewed speaking attempts over time. Scores are coaching indicators—not objective measurements—and use transcript evidence only unless the review explicitly has speech evidence. Unreviewed dimensions remain blank.</p><div id="dimensionProgress"></div><canvas id="chart" width="700" height="260" hidden></canvas></article>
@@ -155,8 +157,8 @@
 <script src="progress.js?build=20261010-p1-examples"></script>
 <script src="workflow.js?build=20261102-teaching-recording"></script>
 <script src="import.js?build=20261010-p1-examples"></script>
-<script src="exercise-runner.js?build=20261102-six-principles"></script>
-<script src="learning.js?build=20261102-logic-humour"></script>
+<script src="exercise-runner.js?build=20261102-exercise-hub"></script>
+<script src="learning.js?build=20261102-validation-detail"></script>
 </body>
 </html>
 

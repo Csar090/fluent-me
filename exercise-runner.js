@@ -49,6 +49,25 @@
     $('clearPractice').onclick=async()=>{if(recorder?.state==='recording')return status('Stop the current recording first.');if(blob||$('transcript').value.trim()){if(!confirm('Save this task response before ending the task?'))return;const saved=await window.FluencyWorkflow.saveCapture();if(!saved)return;reset();}clear();};
     new MutationObserver(()=>{if(!window.FluencyAccess?.isReady())clear()}).observe(document.documentElement,{attributes:true,attributeFilter:['class']});
   }
+  function mountExerciseHub(){
+    const host=$('exerciseCards');if(!host)return;
+    const options=[
+      {name:'Storytelling',prompt:'Tell a true story about a small decision that led to an unexpected outcome. What happened, what changed, and why does it matter?',context:'Storytelling'},
+      {name:'Executive discussion',prompt:'A project is at risk of delay. Explain the issue, your recommendation, and the decision you need from a senior stakeholder.',context:'Executive Briefing'},
+      {name:'Spontaneous response',prompt:'What is one common assumption about productivity that you would question, and why?',context:'Conversation'},
+      {name:'Everyday conversation',prompt:'A friend asks what you have been thinking about recently. Share one idea naturally and explain why it matters to you.',context:'Conversation'},
+      {name:'Humour and perspective',prompt:'Describe a minor everyday frustration and find a lighter way to see it without losing the actual point.',context:'Conversation'}];
+    options.forEach(x=>{const b=document.createElement('button');b.type='button';b.textContent=x.name;b.onclick=async()=>{try{
+      if(recorder?.state==='recording')throw Error('Stop the recording before starting an exercise.');
+      if(blob||$('transcript').value.trim()){if(!confirm('Save the current capture before starting this exercise?'))return;const saved=await window.FluencyWorkflow.saveCapture();if(!saved)return;}
+      reset();$('sessionId').value=crypto.randomUUID();$('groupId').value=$('sessionId').value;$('attemptNo').value=1;$('title').value=x.name+' exercise';$('tags').value='Exercise, '+x.name;$('practiceFocus').textContent=x.prompt;$('practiceFocus').hidden=false;
+      const context=$('context');if([...context.options].some(o=>o.value===x.context))context.value=x.context;
+      window.FluencyWorkflow.tab('capture');window.FluencyWorkflow.jump('currentFocusCard');$('exerciseStartStatus').textContent='Exercise ready in Capture.';
+    }catch(err){$('exerciseStartStatus').textContent=err.message}};host.appendChild(b)});
+    $('openCognitivePractice').onclick=()=>{window.FluencyWorkflow.tab('capture');window.FluencyWorkflow.jump('cognitivePracticeCard')};
+  }
+  document.addEventListener('DOMContentLoaded',mountExerciseHub);
   const previousReset=reset;reset=function(){previousReset();clear()};
   window.FluencyPractice={load,start,ready,snapshot,restore,clear,retry};document.addEventListener('DOMContentLoaded',mount);
 })();
+
