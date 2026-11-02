@@ -109,3 +109,20 @@ function validateWorkedExample_(raw,evidence){
   const walk=raw.thinkingWalkthrough,validWalk=walk&&text(walk.application,3000)&&text(walk.whenNotToUse,1000)&&Array.isArray(walk.mentalSteps)&&walk.mentalSteps.length>=2&&walk.mentalSteps.length<=4&&walk.mentalSteps.every(x=>text(x,1000));
   return{thinkingWalkthrough:validWalk?{application:walk.application,mentalSteps:walk.mentalSteps,whenNotToUse:walk.whenNotToUse}:null,version:'worked-example-v1',improvedResponse:raw.improvedResponse,mainPoint:raw.mainPoint,structure:structure,transformations:transformations,beforeSpeaking:raw.beforeSpeaking,label:'AI teaching example — not your performance evidence',factPreservation:'REQUIRES_LEARNER_CHECK'};
 }
+
+/** Publish immutable evidence and a validated cognitive assessment from an existing communication-review job. */
+function publishUnifiedLearning_(evidence,cognitive,jobId){
+  if(!evidence||!cognitive||!jobId)throw Error('Unified learning evidence is incomplete.');
+  const id='learning-'+jobId,assessmentId='assessment-'+jobId;
+  const lock=LockService.getScriptLock();lock.waitLock(30000);
+  try{
+    const latest=listSessions_().find(x=>x.id===evidence.sessionId);
+    if(!latest||latest.transcript!==evidence.transcript||Number(latest.metrics.transcriptRevision||1)!==evidence.transcriptRevision)throw Error('Transcript changed before evidence could be saved.');
+    const sheets=learningSheets_(),snapshot=Object.assign({},evidence,{evidenceId:id,createdAt:new Date().toISOString()});delete snapshot.transcript;
+    const serialSnapshot=JSON.stringify(snapshot),serialResult=JSON.stringify(cognitive);
+    if(serialSnapshot.length>40000||serialResult.length>40000)throw Error('Unified cognitive evidence exceeds storage limits.');
+    if(!findRow_(sheets.evidence,id))sheets.evidence.appendRow([id,new Date(),JSON.stringify(evidence.sessionId),JSON.stringify(evidence.groupId),evidence.transcriptRevision,JSON.stringify(evidence.transcript),serialSnapshot]);
+    if(!findRow_(sheets.assessments,assessmentId))sheets.assessments.appendRow([assessmentId,new Date(),id,JSON.stringify(evidence.sessionId),serialResult]);
+    return{evidenceId:id,assessmentId:assessmentId};
+  }finally{lock.releaseLock();}
+}
