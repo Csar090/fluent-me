@@ -854,7 +854,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Write one sentence containing the takeaway before retrying.",
       "retrySuccess": "The intended takeaway appears in the first substantive sentence.",
-      "exerciseId": "point-extraction"
+      "exerciseId": "point-extraction",
+      "principleId": "lead-with-point"
     },
     {
       "id": "competing-ideas",
@@ -865,7 +866,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Choose one main claim; place other claims under it.",
       "retrySuccess": "One main claim and clearly subordinate support.",
-      "exerciseId": "pre-speech"
+      "exerciseId": "pre-speech",
+      "principleId": "priority-ladder"
     },
     {
       "id": "premature-speaking",
@@ -876,7 +878,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Use the preparation interval to choose a main point.",
       "retrySuccess": "Preparation use recorded; response opens with chosen point.",
-      "exerciseId": "spontaneous"
+      "exerciseId": "spontaneous",
+      "principleId": "deliberate-start"
     },
     {
       "id": "qualification",
@@ -887,7 +890,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "State the claim, then one necessary caveat.",
       "retrySuccess": "Claim remains clear and necessary caveats remain accurate.",
-      "exerciseId": "compression"
+      "exerciseId": "compression",
+      "principleId": "meaningful-compression"
     },
     {
       "id": "weak-structure",
@@ -898,7 +902,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Select point–reason–example–implication or problem–cause–solution and follow it.",
       "retrySuccess": "Parts follow the selected organisation.",
-      "exerciseId": "structure-selection"
+      "exerciseId": "structure-selection",
+      "principleId": "right-sequence"
     },
     {
       "id": "sequencing",
@@ -909,7 +914,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Choose an order and move each supporting idea into it.",
       "retrySuccess": "Listener can follow the relation between successive ideas.",
-      "exerciseId": "structure-selection"
+      "exerciseId": "structure-selection",
+      "principleId": "right-sequence"
     },
     {
       "id": "repetition",
@@ -920,7 +926,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Delete one redundant restatement while keeping its unique information.",
       "retrySuccess": "Fewer repeated claims; essential meaning retained.",
-      "exerciseId": "compression"
+      "exerciseId": "compression",
+      "principleId": "meaningful-compression"
     },
     {
       "id": "repair",
@@ -931,7 +938,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Plan a single opening sentence, then pause between ideas.",
       "retrySuccess": "Fewer abandoned starts with unchanged meaning.",
-      "exerciseId": "spontaneous"
+      "exerciseId": "spontaneous",
+      "principleId": "deliberate-start"
     },
     {
       "id": "weak-conclusion",
@@ -942,7 +950,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "End with one implication or requested action.",
       "retrySuccess": "Ending makes the takeaway explicit.",
-      "exerciseId": "pre-speech"
+      "exerciseId": "pre-speech",
+      "principleId": "effective-ending"
     },
     {
       "id": "over-explanation",
@@ -953,7 +962,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Keep one reason and one necessary example.",
       "retrySuccess": "Response fits the constraint and retains key nuance.",
-      "exerciseId": "compression"
+      "exerciseId": "compression",
+      "principleId": "meaningful-compression"
     },
     {
       "id": "listener-adaptation",
@@ -964,7 +974,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Define the one unfamiliar concept needed by this listener.",
       "retrySuccess": "Listener can understand without unsupported assumptions.",
-      "exerciseId": "pre-speech"
+      "exerciseId": "pre-speech",
+      "principleId": "audience-bridge"
     },
     {
       "id": "narrative-tension",
@@ -975,7 +986,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Identify the challenge before telling the event.",
       "retrySuccess": "Story establishes a meaningful challenge.",
-      "exerciseId": "future.storytelling"
+      "exerciseId": "future.storytelling",
+      "principleId": "narrative-arc"
     },
     {
       "id": "narrative-payoff",
@@ -986,7 +998,8 @@ const LEARNING_REGISTRY = {
       "uncertainty": "A transcript supports observable patterns, not certainty about internal cognition.",
       "intervention": "Connect the outcome to the initial challenge.",
       "retrySuccess": "Resolution explains what changed.",
-      "exerciseId": "future.storytelling"
+      "exerciseId": "future.storytelling",
+      "principleId": "narrative-arc"
     },
     {
       "id": "literal-frame",
@@ -1204,14 +1217,129 @@ const LEARNING_REGISTRY = {
       "retryStrategy": "Apply one intervention to the same prompt and constraints.",
       "progressionCriteria": "Repeated independent evidence across contexts; no automatic mastery in this phase."
     }
+  ],
+  "principles": [
+    {
+      "id": "lead-with-point",
+      "name": "Choose the listener’s takeaway",
+      "why": "The listener should know what matters before navigating the support.",
+      "whenToUse": "Briefings, recommendations and direct explanations.",
+      "whenNotToUse": "Storytelling, suspense or exploratory reflection can need a setup.",
+      "mentalSteps": [
+        "Choose the one takeaway.",
+        "Say it in one natural sentence.",
+        "Add the necessary reason and caveat."
+      ],
+      "example": "I recommend postponing the launch because the test evidence is incomplete.",
+      "exerciseId": "point-extraction"
+    },
+    {
+      "id": "priority-ladder",
+      "name": "One claim, subordinate support",
+      "why": "Separate the message from the reasons that support it.",
+      "whenToUse": "When several ideas compete for attention.",
+      "whenNotToUse": "When each idea is an independent decision needing separate treatment.",
+      "mentalSteps": [
+        "Select the main claim.",
+        "Group the supporting reasons.",
+        "Remove unrelated branches."
+      ],
+      "example": "The issue is delivery risk. The main causes are staffing and unresolved approvals.",
+      "exerciseId": "pre-speech"
+    },
+    {
+      "id": "right-sequence",
+      "name": "Fit the structure to the purpose",
+      "why": "Sequence determines how easily someone understands the relation between ideas.",
+      "whenToUse": "Explanations, decisions and coherent narratives.",
+      "whenNotToUse": "Do not force conclusion-first when the narrative payoff depends on chronology.",
+      "mentalSteps": [
+        "Identify the audience and purpose.",
+        "Choose a natural order.",
+        "Move each thought into one role."
+      ],
+      "example": "For an update: position → evidence → risk → next step. For a story: setup → tension → turning point → resolution.",
+      "exerciseId": "structure-selection"
+    },
+    {
+      "id": "meaningful-compression",
+      "name": "Remove repetition, not nuance",
+      "why": "Concise expression preserves substance and necessary qualifications.",
+      "whenToUse": "When repetitions or side trails obscure the point.",
+      "whenNotToUse": "When brevity would remove a material qualification, example or emotion.",
+      "mentalSteps": [
+        "Mark what is essential.",
+        "Remove repeated versions of the same point.",
+        "Keep the one qualification that changes the conclusion."
+      ],
+      "example": "The results improved, but we still need to validate the sample before release.",
+      "exerciseId": "compression"
+    },
+    {
+      "id": "deliberate-start",
+      "name": "Form a sentence before speaking",
+      "why": "A short preparation cue can reduce abandoned starts without creating a script.",
+      "whenToUse": "Spontaneous answers when a brief preparation moment exists.",
+      "whenNotToUse": "Live dialogue where listening and turn-taking matter more than an opening formula.",
+      "mentalSteps": [
+        "Identify the point.",
+        "Choose the first sentence.",
+        "Allow a natural pause before the next thought."
+      ],
+      "example": "My view is that we should first clarify the scope, then decide the timeline.",
+      "exerciseId": "spontaneous"
+    },
+    {
+      "id": "effective-ending",
+      "name": "Close with a clear takeaway",
+      "why": "An ending tells the listener what the preceding material means.",
+      "whenToUse": "Updates, explanations and recommendations requiring closure.",
+      "whenNotToUse": "Casual conversations where a formal conclusion would be unnatural.",
+      "mentalSteps": [
+        "Notice what changed.",
+        "Name the implication.",
+        "End without repeating the whole response."
+      ],
+      "example": "So the next step is to verify the numbers before approval.",
+      "exerciseId": "pre-speech"
+    },
+    {
+      "id": "audience-bridge",
+      "name": "Translate for the listener",
+      "why": "Use the minimum background a listener needs, without oversimplifying.",
+      "whenToUse": "Mixed-experience audiences or technical explanations.",
+      "whenNotToUse": "When the audience already shares the vocabulary and context.",
+      "mentalSteps": [
+        "Identify the assumed knowledge.",
+        "Define one critical term.",
+        "Connect it to the decision."
+      ],
+      "example": "A control gap means the evidence cannot yet support the conclusion.",
+      "exerciseId": "pre-speech"
+    },
+    {
+      "id": "narrative-arc",
+      "name": "Build a natural story arc",
+      "why": "A story needs a meaningful change, not only a list of events.",
+      "whenToUse": "Personal stories, anecdotes and narrative explanations.",
+      "whenNotToUse": "Status briefings where the listener needs the decision before the journey.",
+      "mentalSteps": [
+        "Set the scene.",
+        "Show the complication.",
+        "Explain the turning point and consequence."
+      ],
+      "example": "I expected a routine meeting, but one unanswered question changed the decision.",
+      "exerciseId": "structure-selection"
+    }
   ]
 };
 function learningRegistry_(){validateLearningRegistry_();return{ok:true,registry:LEARNING_REGISTRY};}
 function validateLearningRegistry_(){
-  const r=LEARNING_REGISTRY,groups=['domains','competencies','operations','errors','exercises'],sets={};
+  const r=LEARNING_REGISTRY,groups=['domains','competencies','operations','errors','exercises','principles'],sets={};
   groups.forEach(k=>{sets[k]={};r[k].forEach(x=>{if(!x.id||sets[k][x.id])throw Error('Duplicate learning ID: '+x.id);sets[k][x.id]=x})});
   const seen={},visiting={};function visit(id){if(visiting[id])throw Error('Cyclic competency dependency.');if(seen[id])return;const c=sets.competencies[id];if(!c)throw Error('Unknown competency: '+id);visiting[id]=true;(c.dependencies||[]).forEach(visit);delete visiting[id];seen[id]=true;}
   r.competencies.forEach(c=>{if(!sets.domains[c.domain])throw Error('Unknown domain.');c.operationIds.forEach(id=>{if(!sets.operations[id])throw Error('Unknown operation.');});visit(c.id)});
-  r.errors.forEach(e=>{if(!sets.competencies[e.competencyId])throw Error('Unknown error competency.');if(!sets.exercises[e.exerciseId]&&!e.exerciseId.startsWith('future.'))throw Error('Unknown error exercise.');});
+  r.principles.forEach(p=>{if(!p.name||!p.why||!p.whenToUse||!p.whenNotToUse||!Array.isArray(p.mentalSteps)||!p.mentalSteps.length||!p.example||!sets.exercises[p.exerciseId])throw Error('Invalid principle mapping.');});
+  r.errors.forEach(e=>{if(e.principleId&&!sets.principles[e.principleId])throw Error('Unknown error principle.');if(!sets.competencies[e.competencyId])throw Error('Unknown error competency.');if(!sets.exercises[e.exerciseId]&&!e.exerciseId.startsWith('future.'))throw Error('Unknown error exercise.');});
   r.exercises.forEach(e=>{if(!sets.competencies[e.competencyId]||!sets.operations[e.operationId])throw Error('Unknown exercise reference.');if(!sets.competencies[e.competencyId].subSkills.some(s=>s.id===e.subSkillId))throw Error('Unknown sub-skill.');e.errorIds.forEach(id=>{if(!sets.errors[id])throw Error('Unknown exercise error.');});e.prerequisites.forEach(visit);});return true;
 }
